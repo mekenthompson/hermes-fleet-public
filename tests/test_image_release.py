@@ -116,13 +116,15 @@ class FleetImageReleaseTests(unittest.TestCase):
             "HERMES_FLEET_IMAGE_IDENTITY",
             "HERMES_FLEET_AGENT_IMAGE",
             "docker.sock",
-            "Config.User",
-            "Config.Entrypoint",
-            "Config.Cmd",
+            "scripts/verify-inherited-runtime-config.py",
             "os.getuid() != 0",
             "docker/login-action@",
         ):
             self.assertIn(token, text)
+        runtime = (ROOT / "scripts/verify-inherited-runtime-config.py").read_text(encoding="utf-8")
+        self.assertIn("Config.User", runtime)
+        self.assertIn("Config.Entrypoint", runtime)
+        self.assertIn("Config.Cmd", runtime)
 
     def test_exact_candidate_scan_and_publication_contract(self) -> None:
         text = WORKFLOW.read_text(encoding="utf-8")

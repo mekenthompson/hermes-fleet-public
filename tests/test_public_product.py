@@ -33,6 +33,7 @@ class PublicProductTests(unittest.TestCase):
             "scripts/read-agent-image-manifest.py",
             "scripts/emit-fleet-image-manifest.py",
             "scripts/compact-spdx-sbom.py",
+            "scripts/verify-inherited-runtime-config.py",
             "docs/image-release.md",
         ):
             with self.subTest(relative=relative):
