@@ -21,6 +21,7 @@ env:
   IMAGE_REPOSITORY: ghcr.io/mekenthompson/hermes-fleet-public
   TEST_IMAGE: ghcr.io/mekenthompson/hermes-fleet-public:sha-${{ github.sha }}
   ONEPASSWORD_CLI_IMAGE: docker.io/1password/op@sha256:d7d12b409ec699c9fa139d3bdfc80671f744380d39db8c539d9dc6e7e553d3c1
+  CLAUDE_CODE_VERSION: "2.1.251"
 
 jobs:
   preflight:
@@ -73,6 +74,7 @@ jobs:
           build-args: |
             AGENT_IMAGE=${{ steps.agent.outputs.AGENT_IMAGE }}
             ONEPASSWORD_CLI_IMAGE=${{ env.ONEPASSWORD_CLI_IMAGE }}
+            CLAUDE_CODE_VERSION=${{ env.CLAUDE_CODE_VERSION }}
             FLEET_GIT_SHA=${{ github.sha }}
             FLEET_IMAGE_IDENTITY=${{ env.IMAGE_REPOSITORY }}
           cache-from: type=gha,scope=fleet-public-amd64
@@ -86,6 +88,7 @@ jobs:
           EXPECTED_AGENT_REPOSITORY: ${{ env.AGENT_REPOSITORY }}
           EXPECTED_AGENT_REVISION: ${{ env.AGENT_REVISION }}
           EXPECTED_ONEPASSWORD_CLI_IMAGE: ${{ env.ONEPASSWORD_CLI_IMAGE }}
+          EXPECTED_CLAUDE_CODE_VERSION: ${{ env.CLAUDE_CODE_VERSION }}
         run: |
           set -euo pipefail
           python3 scripts/verify-inherited-runtime-config.py
@@ -96,6 +99,7 @@ jobs:
             --env EXPECTED_AGENT_REPOSITORY \
             --env EXPECTED_AGENT_REVISION \
             --env EXPECTED_ONEPASSWORD_CLI_IMAGE \
+            --env EXPECTED_CLAUDE_CODE_VERSION \
             --entrypoint python3 "$TEST_IMAGE" -c '
           import importlib.metadata as metadata
           import json, os, pathlib, pwd, subprocess
@@ -108,11 +112,14 @@ jobs:
           assert fleet["image"] == os.environ["EXPECTED_IMAGE_IDENTITY"], fleet
           assert fleet["parent_agent_image"] == os.environ["EXPECTED_AGENT_IMAGE"], fleet
           assert fleet["onepassword_cli_image"] == os.environ["EXPECTED_ONEPASSWORD_CLI_IMAGE"], fleet
+          assert fleet["claude_code_version"] == os.environ["EXPECTED_CLAUDE_CODE_VERSION"], fleet
           assert os.environ["HERMES_FLEET_GIT_SHA"] == os.environ["EXPECTED_REVISION"]
           assert os.environ["HERMES_FLEET_IMAGE_IDENTITY"] == os.environ["EXPECTED_IMAGE_IDENTITY"]
           assert os.environ["HERMES_FLEET_AGENT_IMAGE"] == os.environ["EXPECTED_AGENT_IMAGE"]
           assert os.environ["HERMES_FLEET_ONEPASSWORD_CLI_IMAGE"] == os.environ["EXPECTED_ONEPASSWORD_CLI_IMAGE"]
+          assert os.environ["HERMES_FLEET_CLAUDE_CODE_VERSION"] == os.environ["EXPECTED_CLAUDE_CODE_VERSION"]
           assert subprocess.check_output(["/usr/local/bin/op", "--version"], text=True).strip() == "2.39.0"
+          assert subprocess.check_output(["/usr/local/bin/claude", "--version"], text=True).strip() == os.environ["EXPECTED_CLAUDE_CODE_VERSION"] + " (Claude Code)"
           assert pwd.getpwnam("hermes").pw_uid != 0
           assert not pathlib.Path("/var/run/docker.sock").exists()
           assert pathlib.Path("/opt/hermes-fleet/contracts/image.json").is_file()
@@ -254,6 +261,7 @@ jobs:
           EXPECTED_AGENT_REPOSITORY: ${{ env.AGENT_REPOSITORY }}
           EXPECTED_AGENT_REVISION: ${{ env.AGENT_REVISION }}
           EXPECTED_ONEPASSWORD_CLI_IMAGE: ${{ env.ONEPASSWORD_CLI_IMAGE }}
+          EXPECTED_CLAUDE_CODE_VERSION: ${{ env.CLAUDE_CODE_VERSION }}
         run: |
           set -euo pipefail
           docker pull "$AGENT_IMAGE"
@@ -266,6 +274,7 @@ jobs:
             --env EXPECTED_AGENT_REPOSITORY \
             --env EXPECTED_AGENT_REVISION \
             --env EXPECTED_ONEPASSWORD_CLI_IMAGE \
+            --env EXPECTED_CLAUDE_CODE_VERSION \
             --entrypoint python3 "$TEST_IMAGE" -c '
           import importlib.metadata as metadata
           import json, os, pathlib, pwd, subprocess
@@ -278,11 +287,14 @@ jobs:
           assert fleet["image"] == os.environ["EXPECTED_IMAGE_IDENTITY"], fleet
           assert fleet["parent_agent_image"] == os.environ["EXPECTED_AGENT_IMAGE"], fleet
           assert fleet["onepassword_cli_image"] == os.environ["EXPECTED_ONEPASSWORD_CLI_IMAGE"], fleet
+          assert fleet["claude_code_version"] == os.environ["EXPECTED_CLAUDE_CODE_VERSION"], fleet
           assert os.environ["HERMES_FLEET_GIT_SHA"] == os.environ["EXPECTED_REVISION"]
           assert os.environ["HERMES_FLEET_IMAGE_IDENTITY"] == os.environ["EXPECTED_IMAGE_IDENTITY"]
           assert os.environ["HERMES_FLEET_AGENT_IMAGE"] == os.environ["EXPECTED_AGENT_IMAGE"]
           assert os.environ["HERMES_FLEET_ONEPASSWORD_CLI_IMAGE"] == os.environ["EXPECTED_ONEPASSWORD_CLI_IMAGE"]
+          assert os.environ["HERMES_FLEET_CLAUDE_CODE_VERSION"] == os.environ["EXPECTED_CLAUDE_CODE_VERSION"]
           assert subprocess.check_output(["/usr/local/bin/op", "--version"], text=True).strip() == "2.39.0"
+          assert subprocess.check_output(["/usr/local/bin/claude", "--version"], text=True).strip() == os.environ["EXPECTED_CLAUDE_CODE_VERSION"] + " (Claude Code)"
           assert pwd.getpwnam("hermes").pw_uid != 0
           assert not pathlib.Path("/var/run/docker.sock").exists()
           '
