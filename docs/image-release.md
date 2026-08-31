@@ -12,7 +12,7 @@ The final authenticated artifact is a House handoff manifest containing only pub
 
 ## Boundaries
 
-This workflow performs **no production deployment**. It does not modify profile state, Docker Compose inputs, networks, secrets, or running containers. The public image inherits the Agent image's user, entrypoint, and command and adds only public contracts, verification tools, labels, and provenance environment values.
+This workflow performs **no production deployment**. It does not modify profile state, Docker Compose inputs, networks, secrets, or running containers. The public image inherits the Agent image's user, entrypoint, and command. The Agent image records `User=root` and drops to the non-root `hermes` account through its entrypoint; Fleet adds only public contracts, verification tools, labels, and provenance values.
 
 ## Approval
 

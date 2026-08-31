@@ -30,9 +30,6 @@ def main() -> int:
             continue
         if parent != current:
             raise SystemExit(f"inherited {field} mismatch")
-    user = inspect(child, ".Config.User") or ""
-    if user in ("0", "0:0", "root", "root:root"):
-        raise SystemExit("explicit root user")
     return 0
 
 
