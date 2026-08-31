@@ -17,6 +17,10 @@ AGENT_REPOSITORY = "ghcr.io/mekenthompson/hermes-agent"
 AGENT_REVISION = "5aa54ca6b47db1271b9101f4a08076e17bc9b759"
 AGENT_DIGEST = "sha256:9c6473d0eb3ccf0c7b82d8599d0d42af622e8e7a7f22525bb3743b4a83f17dc5"
 AGENT_REF = f"{AGENT_REPOSITORY}@{AGENT_DIGEST}"
+ONEPASSWORD_CLI_IMAGE = (
+    "docker.io/1password/op@"
+    "sha256:d7d12b409ec699c9fa139d3bdfc80671f744380d39db8c539d9dc6e7e553d3c1"
+)
 
 
 class FleetImageReleaseTests(unittest.TestCase):
@@ -78,14 +82,22 @@ class FleetImageReleaseTests(unittest.TestCase):
 
     def test_dockerfile_bakes_public_provenance_without_changing_runtime_contract(self) -> None:
         text = (ROOT / "Dockerfile").read_text(encoding="utf-8")
-        self.assertEqual(re.findall(r"(?m)^FROM\s+(.+)$", text), ["${AGENT_IMAGE}"])
+        self.assertEqual(
+            re.findall(r"(?m)^FROM\s+(.+)$", text),
+            ["${ONEPASSWORD_CLI_IMAGE} AS onepassword_cli", "${AGENT_IMAGE}"],
+        )
         for token in (
+            f"ARG ONEPASSWORD_CLI_IMAGE={ONEPASSWORD_CLI_IMAGE}",
+            "COPY --from=onepassword_cli --chmod=0755 /usr/local/bin/op /usr/local/bin/op",
+            'test "$(/usr/local/bin/op --version)" = "2.39.0"',
             "ARG FLEET_GIT_SHA",
             "ARG FLEET_IMAGE_IDENTITY",
             "HERMES_FLEET_GIT_SHA=${FLEET_GIT_SHA}",
             "HERMES_FLEET_IMAGE_IDENTITY=${FLEET_IMAGE_IDENTITY}",
             "HERMES_FLEET_AGENT_IMAGE=${AGENT_IMAGE}",
+            "HERMES_FLEET_ONEPASSWORD_CLI_IMAGE=${ONEPASSWORD_CLI_IMAGE}",
             "org.opencontainers.image.revision=\"${FLEET_GIT_SHA}\"",
+            "onepassword_cli_image",
             "/etc/hermes-fleet/image-provenance.json",
         ):
             self.assertIn(token, text)
@@ -125,6 +137,9 @@ class FleetImageReleaseTests(unittest.TestCase):
             "HERMES_FLEET_GIT_SHA",
             "HERMES_FLEET_IMAGE_IDENTITY",
             "HERMES_FLEET_AGENT_IMAGE",
+            "HERMES_FLEET_ONEPASSWORD_CLI_IMAGE",
+            "ONEPASSWORD_CLI_IMAGE",
+            'subprocess.check_output(["/usr/local/bin/op", "--version"]',
             "docker.sock",
             "scripts/verify-inherited-runtime-config.py",
             "os.getuid() != 0",
@@ -135,6 +150,10 @@ class FleetImageReleaseTests(unittest.TestCase):
         self.assertIn("Config.User", runtime)
         self.assertIn("Config.Entrypoint", runtime)
         self.assertIn("Config.Cmd", runtime)
+        self.assertEqual(
+            text.count('subprocess.check_output(["/usr/local/bin/op", "--version"]'),
+            2,
+        )
 
     def test_exact_candidate_scan_and_publication_contract(self) -> None:
         text = WORKFLOW.read_text(encoding="utf-8")
@@ -363,6 +382,9 @@ class FleetImageReleaseTests(unittest.TestCase):
             "no production deployment",
             "fleet-image-publish",
             "rollback",
+            "1password cli 2.39.0",
+            "official image digest",
+            "contains no credentials",
         ):
             self.assertIn(token, text)
 

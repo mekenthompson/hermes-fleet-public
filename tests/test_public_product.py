@@ -56,11 +56,26 @@ class PublicProductTests(unittest.TestCase):
 
     def test_dockerfile_is_a_minimal_digest_parameterized_child(self) -> None:
         text = (ROOT / "Dockerfile").read_text(encoding="utf-8")
-        self.assertEqual(re.findall(r"(?m)^FROM\s+(.+)$", text), ["${AGENT_IMAGE}"])
+        op_image = (
+            "docker.io/1password/op@"
+            "sha256:d7d12b409ec699c9fa139d3bdfc80671f744380d39db8c539d9dc6e7e553d3c1"
+        )
+        self.assertEqual(
+            re.findall(r"(?m)^FROM\s+(.+)$", text),
+            ["${ONEPASSWORD_CLI_IMAGE} AS onepassword_cli", "${AGENT_IMAGE}"],
+        )
+        self.assertIn(f"ARG ONEPASSWORD_CLI_IMAGE={op_image}", text)
         self.assertIn("ARG AGENT_IMAGE", text)
+        self.assertIn(
+            "COPY --from=onepassword_cli --chmod=0755 /usr/local/bin/op /usr/local/bin/op",
+            text,
+        )
         self.assertIn("scripts/image_ref.py /opt/hermes-fleet/bin/image_ref.py", text)
         self.assertIn("scripts/verify-agent-image-ref.py /opt/hermes-fleet/bin/verify-agent-image-ref", text)
         self.assertNotRegex(text, r"(?m)^\s*(?:ENTRYPOINT|CMD|USER)\b")
+        self.assertNotIn("apt-get", text)
+        self.assertNotIn("curl ", text)
+        self.assertNotIn("wget ", text)
         self.assertNotIn("core_runtime_paths", text)
 
     def test_compose_uses_synthetic_profiles_and_dedicated_networks(self) -> None:
