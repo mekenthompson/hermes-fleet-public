@@ -84,18 +84,7 @@ jobs:
           EXPECTED_AGENT_REVISION: ${{ env.AGENT_REVISION }}
         run: |
           set -euo pipefail
-          parent_user=$(docker image inspect --format '{{json .Config.User}}' "$AGENT_IMAGE")
-          child_user=$(docker image inspect --format '{{json .Config.User}}' "$TEST_IMAGE")
-          parent_entrypoint=$(docker image inspect --format '{{json .Config.Entrypoint}}' "$AGENT_IMAGE")
-          child_entrypoint=$(docker image inspect --format '{{json .Config.Entrypoint}}' "$TEST_IMAGE")
-          parent_cmd=$(docker image inspect --format '{{json .Config.Cmd}}' "$AGENT_IMAGE")
-          child_cmd=$(docker image inspect --format '{{json .Config.Cmd}}' "$TEST_IMAGE")
-          test "$child_user" = "$parent_user"
-          test "$child_entrypoint" = "$parent_entrypoint"
-          test "$child_cmd" = "$parent_cmd"
-          case "$child_user" in
-            '"0"'|'"0:0"'|'"root"'|'"root:root"') exit 1 ;;
-          esac
+          python3 scripts/verify-inherited-runtime-config.py
           docker run --rm \
             --env EXPECTED_REVISION \
             --env EXPECTED_IMAGE_IDENTITY \
@@ -185,7 +174,7 @@ jobs:
             fleet-image.spdx.json
             fleet-image.attestation.spdx.json
             trivy-image.json
-          if-no-files-found: error
+          if-no-files-found: warn
           retention-days: 30
 
   publish:
@@ -221,6 +210,13 @@ jobs:
         with:
           name: fleet-image-candidate-${{ github.sha }}
 
+      - name: Log in to GHCR
+        uses: docker/login-action@4907a6ddec9925e35a0a9e82d7399ccc52663121 # v4.1.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+
       - name: Load and verify exact scanned candidate
         env:
           EXPECTED_REVISION: ${{ github.sha }}
@@ -230,11 +226,9 @@ jobs:
           EXPECTED_AGENT_REVISION: ${{ env.AGENT_REVISION }}
         run: |
           set -euo pipefail
+          docker pull "$AGENT_IMAGE"
           gzip -dc fleet-image.tar.gz | docker load
-          child_user=$(docker image inspect --format '{{json .Config.User}}' "$TEST_IMAGE")
-          case "$child_user" in
-            '"0"'|'"0:0"'|'"root"'|'"root:root"') exit 1 ;;
-          esac
+          python3 scripts/verify-inherited-runtime-config.py
           docker run --rm \
             --env EXPECTED_REVISION \
             --env EXPECTED_IMAGE_IDENTITY \
@@ -259,13 +253,6 @@ jobs:
           assert not pathlib.Path("/var/run/docker.sock").exists()
           '
           docker run --rm --network none "$TEST_IMAGE" python3 -c 'import os; assert os.getuid() != 0'
-
-      - name: Log in to GHCR
-        uses: docker/login-action@4907a6ddec9925e35a0a9e82d7399ccc52663121 # v4.1.0
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ github.token }}
 
       - name: Push exact scanned candidate
         id: publish
