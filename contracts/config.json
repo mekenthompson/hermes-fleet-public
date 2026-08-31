@@ -1,0 +1,144 @@
+{
+  "schema_version": 1,
+  "status": "public_product_skeleton",
+  "layers": [
+    {
+      "id": "image",
+      "owner": "public_product",
+      "mode": "immutable",
+      "contains": [
+        "executable_runtime",
+        "version_coupled_static_assets"
+      ],
+      "secrets_allowed": false
+    },
+    {
+      "id": "managed",
+      "owner": "deployment_administrator",
+      "path": "/etc/hermes/config.yaml",
+      "mode": "read_only",
+      "contains": [
+        "small_restart_gated_policy_set"
+      ],
+      "fail_open": true,
+      "security_boundary": false,
+      "secrets_allowed": false
+    },
+    {
+      "id": "desired_state",
+      "owner": "deployment_repository",
+      "mode": "declarative_non_secret",
+      "contains": [
+        "shared_defaults",
+        "role_defaults",
+        "profile_overrides"
+      ],
+      "secrets_allowed": false
+    },
+    {
+      "id": "temporary_override",
+      "owner": "audited_operator_control",
+      "mode": "expiring_non_git",
+      "contains": [
+        "allowlisted_mutable_overrides",
+        "reason",
+        "owner",
+        "expiry"
+      ],
+      "git_allowed": false,
+      "secrets_allowed": false,
+      "expiry_required": true,
+      "read_back_required": true
+    },
+    {
+      "id": "live_profile",
+      "owner": "exclusive_profile_state",
+      "path": "/opt/data/config.yaml",
+      "mode": "read_write",
+      "contains": [
+        "model_selection",
+        "compression",
+        "display",
+        "provider_tuning",
+        "profile_tool_selection"
+      ],
+      "secrets_allowed": false
+    },
+    {
+      "id": "secrets",
+      "owner": "external_secret_source",
+      "mode": "runtime_injection",
+      "git_allowed": false,
+      "image_allowed": false,
+      "managed_config_allowed": false,
+      "public_contract": "required_names_only"
+    },
+    {
+      "id": "runtime_state",
+      "owner": "exclusive_profile_state",
+      "path": "/opt/data",
+      "mode": "read_write",
+      "contains": [
+        "authentication_state",
+        "sessions",
+        "memories",
+        "cron_state",
+        "cache"
+      ],
+      "git_allowed": false,
+      "image_allowed": false
+    }
+  ],
+  "authored_agent_distribution": {
+    "mechanism": "hermes_profile_distribution",
+    "purpose": "portable versioned authored-agent defaults",
+    "allowed_contents": [
+      "soul",
+      "config_defaults",
+      "skills",
+      "cron_definitions",
+      "mcp_declarations",
+      "plugin_declarations"
+    ],
+    "forbidden_contents": [
+      "credentials",
+      "authentication_state",
+      "memories",
+      "sessions",
+      "logs",
+      "workspace_state"
+    ],
+    "security_boundary": false,
+    "live_config_authority": false
+  },
+  "desired_state": {
+    "precedence": [
+      "shared",
+      "role",
+      "profile",
+      "temporary_override"
+    ],
+    "managed_key_allowlist_required": true,
+    "managed_mutable_key_sets_disjoint": true,
+    "dry_run_required": true,
+    "target_only_required": true,
+    "redacted_diff_required": true,
+    "read_back_required": true,
+    "idempotence_required": true,
+    "unknown_key_policy": "fail_closed",
+    "secret_value_policy": "reject",
+    "mutation_bridge": "audited_profile_bridge"
+  },
+  "examples": {
+    "managed_policy_keys": [
+      "security.redact_secrets",
+      "terminal.backend"
+    ],
+    "mutable_desired_keys": [
+      "model.default",
+      "compression.threshold_tokens",
+      "display.tool_progress_command",
+      "prompt_caching.cache_ttl"
+    ]
+  }
+}

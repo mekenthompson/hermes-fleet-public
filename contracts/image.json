@@ -1,0 +1,103 @@
+{
+  "schema_version": 1,
+  "status": "public_product_skeleton",
+  "repositories": {
+    "agent": {
+      "visibility": "public",
+      "purpose": "upstream-aligned Hermes source fork"
+    },
+    "fleet": {
+      "visibility": "public",
+      "history": "new_clean_history",
+      "purpose": "generic isolated multi-agent Docker product"
+    }
+  },
+  "images": {
+    "agent": {
+      "source_repository": "https://github.com/mekenthompson/hermes-agent",
+      "source_ref_policy": "exact_pushed_commit",
+      "publisher": "public_fleet_pipeline",
+      "contents": [
+        "complete_hermes_runtime",
+        "runtime_dependencies",
+        "upstream_entrypoint"
+      ],
+      "provenance_required": true
+    },
+    "fleet": {
+      "base": "agent_digest",
+      "require_digest_pin": true,
+      "contents": [
+        "generic_container_isolation_contract",
+        "generic_healthchecks",
+        "generic_rollout_and_rollback_tools",
+        "generic_provenance_verifiers"
+      ],
+      "private_defaults_allowed": false
+    }
+  },
+  "runtime": {
+    "isolation": "one_container_per_profile",
+    "mounts": [
+      {
+        "container_path": "/opt/data",
+        "mode": "read_write",
+        "scope": "exclusive_per_profile",
+        "purpose": "Hermes profile configuration and runtime state"
+      },
+      {
+        "container_path": "/opt/data/workspace",
+        "mode": "read_write",
+        "scope": "exclusive_per_profile",
+        "purpose": "agent working tree"
+      },
+      {
+        "container_path": "/etc/hermes/config.yaml",
+        "mode": "read_only_optional",
+        "scope": "deployment_managed",
+        "purpose": "small administrator policy overlay"
+      }
+    ],
+    "docker_socket_default": false,
+    "host_bridge_default": false,
+    "privileged_default": false,
+    "network": {
+      "default": "dedicated_per_profile_bridge",
+      "host_network_allowed": false,
+      "shared_default_fleet_network_allowed": false,
+      "shared_service_attachment": "explicit_allowlist_only",
+      "cross_profile_connectivity_default": false,
+      "egress": "explicitly_configured_and_tested"
+    },
+    "container_user_contract": "resolve_by_acceptance_test",
+    "acceptance_tests": [
+      "cold_empty_state",
+      "warm_existing_state",
+      "uid_gid_ownership",
+      "non_root_steady_state",
+      "graceful_shutdown",
+      "state_persistence",
+      "profile_isolation",
+      "no_docker_socket",
+      "restricted_profile_no_host_bridge",
+      "cross_profile_network_denied",
+      "host_only_service_denied",
+      "configured_egress",
+      "rollback"
+    ]
+  },
+  "publication": {
+    "implementation_state": "future_release_gate",
+    "before_production_canary": false,
+    "requires_exercised_rollback": true,
+    "requires_clean_public_history": true,
+    "requires_tree_secret_scan": true,
+    "requires_history_secret_scan": true,
+    "requires_image_layer_scan": true,
+    "requires_build_artifact_scan": true,
+    "requires_sbom": true,
+    "requires_dependency_provenance_review": true,
+    "requires_vulnerability_review": true,
+    "requires_license_review": true
+  }
+}

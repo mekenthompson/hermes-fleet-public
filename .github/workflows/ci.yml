@@ -1,0 +1,40 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  source-checks:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          persist-credentials: false
+      - name: Unit tests
+        run: python3 -m unittest discover -s tests -p 'test_*.py' -v
+      - name: Compose syntax
+        env:
+          HERMES_FLEET_IMAGE: ghcr.io/example/hermes-fleet@sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+        run: python3 scripts/compose.py config -q
+      - name: Immutable reference guards
+        run: |
+          python3 scripts/build-fleet-image.py \
+            --agent-image ghcr.io/example/hermes-agent@sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef \
+            --tag hermes-fleet:test \
+            --dry-run
+          ! python3 scripts/build-fleet-image.py \
+            --agent-image ghcr.io/example/hermes-agent:latest \
+            --tag hermes-fleet:test \
+            --dry-run
+      - name: Public tree policy
+        run: python3 scripts/verify-public-tree.py

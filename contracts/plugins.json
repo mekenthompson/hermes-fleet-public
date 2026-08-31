@@ -1,0 +1,58 @@
+{
+  "schema_version": 1,
+  "status": "public_product_skeleton",
+  "public_base": {
+    "policy": "minimal",
+    "default_enabled_plugins": [],
+    "bundled_capabilities": [
+      "generic_healthcheck",
+      "generic_provenance_verification",
+      "generic_rollout_and_rollback"
+    ]
+  },
+  "targets": [
+    "standalone_public_plugin",
+    "undecided"
+  ],
+  "components": [
+    {
+      "id": "web-provider",
+      "target": "standalone_public_plugin",
+      "default_enabled": false,
+      "conditions": [
+        "generic_configuration",
+        "independent_tests",
+        "license_review",
+        "no_deployment_identity"
+      ]
+    },
+    {
+      "id": "work-tracker",
+      "target": "standalone_public_plugin",
+      "default_enabled": false,
+      "conditions": [
+        "remove_deployment_policy",
+        "synthetic_examples_only",
+        "independent_tests",
+        "license_review"
+      ]
+    },
+    {
+      "id": "browser-handoff",
+      "target": "undecided",
+      "default_enabled": false,
+      "decision_gate": "separate_generic_protocol_from_deployment_policy"
+    },
+    {
+      "id": "voice-provider",
+      "target": "undecided",
+      "default_enabled": false,
+      "decision_gate": "prove_generic_value_and_independent_lifecycle"
+    }
+  ],
+  "excluded_capability_classes": [
+    "deployment_identity_policy",
+    "operator_subscription_tools",
+    "deployment_specific_integrations"
+  ]
+}

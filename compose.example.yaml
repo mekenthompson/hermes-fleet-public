@@ -1,0 +1,40 @@
+name: hermes-fleet-example
+
+x-hermes-agent: &hermes-agent
+  image: ${HERMES_FLEET_IMAGE:?set a digest-pinned Fleet image}
+  restart: unless-stopped
+  environment:
+    HERMES_UID: ${HERMES_UID:-1000}
+    HERMES_GID: ${HERMES_GID:-1000}
+  command: ["gateway", "run"]
+
+services:
+  operator:
+    <<: *hermes-agent
+    volumes:
+      - operator-state:/opt/data
+      - operator-workspace:/opt/data/workspace
+      - ./examples/operator-managed.yaml:/etc/hermes/config.yaml:ro
+    networks:
+      - operator-network
+
+  worker:
+    <<: *hermes-agent
+    volumes:
+      - worker-state:/opt/data
+      - worker-workspace:/opt/data/workspace
+      - ./examples/worker-managed.yaml:/etc/hermes/config.yaml:ro
+    networks:
+      - worker-network
+
+volumes:
+  operator-state:
+  operator-workspace:
+  worker-state:
+  worker-workspace:
+
+networks:
+  operator-network:
+    driver: bridge
+  worker-network:
+    driver: bridge
