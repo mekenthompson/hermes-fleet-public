@@ -33,7 +33,16 @@ class PublicProductTests(unittest.TestCase):
                 self.assertTrue((ROOT / relative).is_file())
 
     def test_repository_has_no_remote_and_clean_history_contract(self) -> None:
+        roots = subprocess.check_output(
+            ["git", "rev-list", "--max-parents=0", "HEAD"],
+            cwd=ROOT,
+            text=True,
+        ).split()
+        self.assertEqual(roots, ["4dbbe890715aec58a04fd376559a97fa300e9486"])
         config = (ROOT / ".git" / "config").read_text(encoding="utf-8")
+        # GitHub checkouts have origin. Local publication candidates must not.
+        if os.environ.get("GITHUB_ACTIONS"):
+            return
         self.assertNotIn('[remote "', config)
 
     def test_dockerfile_is_a_minimal_digest_parameterized_child(self) -> None:
