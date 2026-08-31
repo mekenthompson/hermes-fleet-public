@@ -28,6 +28,12 @@ class PublicProductTests(unittest.TestCase):
             "scripts/verify-agent-image-ref.py",
             "scripts/build-fleet-image.py",
             "scripts/compose.py",
+            ".github/workflows/fleet-image.yml",
+            "release/agent-image-manifest.json",
+            "scripts/read-agent-image-manifest.py",
+            "scripts/emit-fleet-image-manifest.py",
+            "scripts/compact-spdx-sbom.py",
+            "docs/image-release.md",
         ):
             with self.subTest(relative=relative):
                 self.assertTrue((ROOT / relative).is_file())
@@ -39,10 +45,12 @@ class PublicProductTests(unittest.TestCase):
             text=True,
         ).split()
         self.assertEqual(roots, ["4dbbe890715aec58a04fd376559a97fa300e9486"])
-        config = (ROOT / ".git" / "config").read_text(encoding="utf-8")
-        # GitHub checkouts have origin. Local publication candidates must not.
-        if os.environ.get("GITHUB_ACTIONS"):
+        git_metadata = ROOT / ".git"
+        # GitHub checkouts and linked worktrees have a remote by design. The
+        # original local publication candidate must remain remote-free.
+        if os.environ.get("GITHUB_ACTIONS") or git_metadata.is_file():
             return
+        config = (git_metadata / "config").read_text(encoding="utf-8")
         self.assertNotIn('[remote "', config)
 
     def test_dockerfile_is_a_minimal_digest_parameterized_child(self) -> None:
@@ -70,7 +78,7 @@ class PublicProductTests(unittest.TestCase):
         image = json.loads((ROOT / "contracts/image.json").read_text())
         config = json.loads((ROOT / "contracts/config.json").read_text())
         plugins = json.loads((ROOT / "contracts/plugins.json").read_text())
-        self.assertEqual(image["status"], "public_product_skeleton")
+        self.assertEqual(image["status"], "public_release_pipeline")
         self.assertEqual(image["images"]["fleet"]["base"], "agent_digest")
         self.assertTrue(image["images"]["agent"]["provenance_required"])
         self.assertEqual(image["runtime"]["network"]["default"], "dedicated_per_profile_bridge")
@@ -91,7 +99,7 @@ class PublicProductTests(unittest.TestCase):
         ):
             with self.subTest(prohibited=prohibited):
                 self.assertNotIn(prohibited, contract_text)
-        self.assertEqual(image["publication"]["implementation_state"], "future_release_gate")
+        self.assertEqual(image["publication"]["implementation_state"], "protected_release_workflow")
 
     def test_immutable_reference_wrappers_reject_mutable_images(self) -> None:
         digest = "0123456789abcdef" * 4

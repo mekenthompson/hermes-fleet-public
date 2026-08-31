@@ -2,7 +2,7 @@
 
 An opinionated, public Docker isolation pattern for running multiple [Hermes Agent](https://github.com/NousResearch/hermes-agent) profiles as separate containers.
 
-This repository is a product skeleton. It does not yet publish images or claim production readiness.
+This repository publishes a minimal, provenance-bound Fleet child image through a protected manual release workflow. Source publication and image publication do not imply production readiness or authorize deployment.
 
 ## Design
 
@@ -30,6 +30,18 @@ python3 scripts/compose.py config
 ```
 
 Direct `docker build` and `docker compose` calls bypass the immutable-reference guard and are not supported.
+
+## Published image releases
+
+The protected Fleet image workflow builds from the exact Agent handoff in `release/agent-image-manifest.json`. Pull requests run a non-publishing build, runtime/provenance verification, full and bounded SPDX generation, and Trivy critical-vulnerability gate. A manual `publish=true` dispatch from `main` promotes that exact scanned candidate without rebuilding.
+
+Release image repository:
+
+```text
+ghcr.io/mekenthompson/hermes-fleet-public
+```
+
+Consume release outputs only by immutable digest. The authenticated House handoff artifact records the Fleet source/digest and its exact Agent parent. Image publication does not deploy profiles or authorize production rollout. See [`docs/image-release.md`](docs/image-release.md).
 
 ## Local validation
 
