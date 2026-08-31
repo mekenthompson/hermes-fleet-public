@@ -264,6 +264,7 @@ class PublicProductTests(unittest.TestCase):
     def test_ci_is_source_only_and_pinned(self) -> None:
         text = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
         self.assertIn("permissions:\n  contents: read", text)
+        self.assertIn("fetch-depth: 0", text)
         self.assertIn("python3 -m unittest discover", text)
         self.assertIn("scripts/verify-public-tree.py", text)
         self.assertIn("python3 scripts/compose.py config -q", text)
