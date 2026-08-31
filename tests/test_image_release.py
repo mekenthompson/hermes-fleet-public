@@ -21,6 +21,9 @@ ONEPASSWORD_CLI_IMAGE = (
     "docker.io/1password/op@"
     "sha256:d7d12b409ec699c9fa139d3bdfc80671f744380d39db8c539d9dc6e7e553d3c1"
 )
+CLAUDE_CODE_VERSION = "2.1.251"
+CLAUDE_CODE_INTEGRITY = "sha512-eG+ZPPpW2Dbmnntf1Fz9/T9ewS8I8SKfc1tcU2PqSwmftfjRPP7BXPaCyLuZ8kvgTdiPnJi/2/JnTvTRieneEQ=="
+CLAUDE_CODE_LINUX_X64_INTEGRITY = "sha512-HJyCY1ynzlsBk+N02IJeBNNZmzyd43lMuff49IXtbUDGHlf2XFHcxwYJEWCwIW51J3Hl4MvrqM6Ye8PGpJRIiA=="
 
 
 class FleetImageReleaseTests(unittest.TestCase):
@@ -96,12 +99,43 @@ class FleetImageReleaseTests(unittest.TestCase):
             "HERMES_FLEET_IMAGE_IDENTITY=${FLEET_IMAGE_IDENTITY}",
             "HERMES_FLEET_AGENT_IMAGE=${AGENT_IMAGE}",
             "HERMES_FLEET_ONEPASSWORD_CLI_IMAGE=${ONEPASSWORD_CLI_IMAGE}",
+            "HERMES_FLEET_CLAUDE_CODE_VERSION=${CLAUDE_CODE_VERSION}",
+            "COPY package.json package-lock.json /opt/coding-clis/",
+            "npm ci --omit=dev --prefix /opt/coding-clis",
+            "--ignore-scripts",
+            "node /opt/coding-clis/node_modules/@anthropic-ai/claude-code/install.cjs",
+            "DISABLE_AUTOUPDATER=1",
+            'test "$(/usr/local/bin/claude --version)" = "${CLAUDE_CODE_VERSION} (Claude Code)"',
             "org.opencontainers.image.revision=\"${FLEET_GIT_SHA}\"",
             "onepassword_cli_image",
+            "claude_code_version",
             "/etc/hermes-fleet/image-provenance.json",
         ):
             self.assertIn(token, text)
         self.assertNotRegex(text, r"(?m)^\s*(?:ENTRYPOINT|CMD|USER)\b")
+
+    def test_claude_code_dependency_is_exact_and_integrity_locked(self) -> None:
+        package = json.loads((ROOT / "package.json").read_text(encoding="utf-8"))
+        lock = json.loads((ROOT / "package-lock.json").read_text(encoding="utf-8"))
+        self.assertEqual(package["dependencies"], {"@anthropic-ai/claude-code": CLAUDE_CODE_VERSION})
+        self.assertTrue(package["private"])
+        self.assertEqual(lock["packages"][""]["dependencies"], package["dependencies"])
+        entry = lock["packages"]["node_modules/@anthropic-ai/claude-code"]
+        self.assertEqual(entry["version"], CLAUDE_CODE_VERSION)
+        self.assertEqual(entry["integrity"], CLAUDE_CODE_INTEGRITY)
+        self.assertEqual(
+            entry["resolved"],
+            f"https://registry.npmjs.org/@anthropic-ai/claude-code/-/claude-code-{CLAUDE_CODE_VERSION}.tgz",
+        )
+        native = lock["packages"]["node_modules/@anthropic-ai/claude-code-linux-x64"]
+        self.assertEqual(native["version"], CLAUDE_CODE_VERSION)
+        self.assertEqual(native["integrity"], CLAUDE_CODE_LINUX_X64_INTEGRITY)
+        self.assertEqual(native["os"], ["linux"])
+        self.assertEqual(native["cpu"], ["x64"])
+        self.assertEqual(
+            native["resolved"],
+            f"https://registry.npmjs.org/@anthropic-ai/claude-code-linux-x64/-/claude-code-linux-x64-{CLAUDE_CODE_VERSION}.tgz",
+        )
 
     def test_release_workflow_is_manual_publish_and_least_privilege(self) -> None:
         text = WORKFLOW.read_text(encoding="utf-8")
@@ -138,8 +172,11 @@ class FleetImageReleaseTests(unittest.TestCase):
             "HERMES_FLEET_IMAGE_IDENTITY",
             "HERMES_FLEET_AGENT_IMAGE",
             "HERMES_FLEET_ONEPASSWORD_CLI_IMAGE",
+            "HERMES_FLEET_CLAUDE_CODE_VERSION",
+            "CLAUDE_CODE_VERSION",
             "ONEPASSWORD_CLI_IMAGE",
             'subprocess.check_output(["/usr/local/bin/op", "--version"]',
+            'subprocess.check_output(["/usr/local/bin/claude", "--version"]',
             "docker.sock",
             "scripts/verify-inherited-runtime-config.py",
             "os.getuid() != 0",
@@ -152,6 +189,10 @@ class FleetImageReleaseTests(unittest.TestCase):
         self.assertIn("Config.Cmd", runtime)
         self.assertEqual(
             text.count('subprocess.check_output(["/usr/local/bin/op", "--version"]'),
+            2,
+        )
+        self.assertEqual(
+            text.count('subprocess.check_output(["/usr/local/bin/claude", "--version"]'),
             2,
         )
 

@@ -35,6 +35,8 @@ class PublicProductTests(unittest.TestCase):
             "scripts/compact-spdx-sbom.py",
             "scripts/verify-inherited-runtime-config.py",
             "docs/image-release.md",
+            "package.json",
+            "package-lock.json",
         ):
             with self.subTest(relative=relative):
                 self.assertTrue((ROOT / relative).is_file())
@@ -70,6 +72,11 @@ class PublicProductTests(unittest.TestCase):
             "COPY --from=onepassword_cli --chmod=0755 /usr/local/bin/op /usr/local/bin/op",
             text,
         )
+        self.assertIn("COPY package.json package-lock.json /opt/coding-clis/", text)
+        self.assertIn("npm ci --omit=dev --prefix /opt/coding-clis", text)
+        self.assertIn("--ignore-scripts", text)
+        self.assertIn("node /opt/coding-clis/node_modules/@anthropic-ai/claude-code/install.cjs", text)
+        self.assertIn("DISABLE_AUTOUPDATER=1", text)
         self.assertIn("scripts/image_ref.py /opt/hermes-fleet/bin/image_ref.py", text)
         self.assertIn("scripts/verify-agent-image-ref.py /opt/hermes-fleet/bin/verify-agent-image-ref", text)
         self.assertNotRegex(text, r"(?m)^\s*(?:ENTRYPOINT|CMD|USER)\b")
