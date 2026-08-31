@@ -1,0 +1,312 @@
+name: Fleet Image
+
+on:
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      publish:
+        description: Publish the exact selected main commit to GHCR
+        type: boolean
+        required: true
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: fleet-image-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  IMAGE_REPOSITORY: ghcr.io/mekenthompson/hermes-fleet-public
+  TEST_IMAGE: ghcr.io/mekenthompson/hermes-fleet-public:sha-${{ github.sha }}
+
+jobs:
+  preflight:
+    if: github.repository == 'mekenthompson/hermes-fleet-public'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      contents: read
+      packages: read
+    steps:
+      - name: Checkout exact workflow revision
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+
+      - name: Validate immutable Agent handoff
+        id: agent
+        run: |
+          set -euo pipefail
+          python3 scripts/read-agent-image-manifest.py \
+            --manifest release/agent-image-manifest.json \
+            --github-env "$GITHUB_ENV" \
+            --github-output "$GITHUB_OUTPUT"
+
+      - name: Log in to GHCR to pull the pinned Agent parent
+        uses: docker/login-action@4907a6ddec9925e35a0a9e82d7399ccc52663121 # v4.1.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
+
+      - name: Pull exact Agent parent
+        run: |
+          set -euo pipefail
+          docker pull "$AGENT_IMAGE"
+
+      - name: Build Fleet child without publishing
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
+        with:
+          context: .
+          file: Dockerfile
+          platforms: linux/amd64
+          load: true
+          push: false
+          tags: ${{ env.TEST_IMAGE }}
+          build-args: |
+            AGENT_IMAGE=${{ steps.agent.outputs.AGENT_IMAGE }}
+            FLEET_GIT_SHA=${{ github.sha }}
+            FLEET_IMAGE_IDENTITY=${{ env.IMAGE_REPOSITORY }}
+          cache-from: type=gha,scope=fleet-public-amd64
+          cache-to: type=gha,mode=max,scope=fleet-public-amd64
+
+      - name: Verify inherited runtime and provenance
+        env:
+          EXPECTED_REVISION: ${{ github.sha }}
+          EXPECTED_IMAGE_IDENTITY: ${{ env.IMAGE_REPOSITORY }}
+          EXPECTED_AGENT_IMAGE: ${{ env.AGENT_IMAGE }}
+          EXPECTED_AGENT_REPOSITORY: ${{ env.AGENT_REPOSITORY }}
+          EXPECTED_AGENT_REVISION: ${{ env.AGENT_REVISION }}
+        run: |
+          set -euo pipefail
+          parent_user=$(docker image inspect --format '{{json .Config.User}}' "$AGENT_IMAGE")
+          child_user=$(docker image inspect --format '{{json .Config.User}}' "$TEST_IMAGE")
+          parent_entrypoint=$(docker image inspect --format '{{json .Config.Entrypoint}}' "$AGENT_IMAGE")
+          child_entrypoint=$(docker image inspect --format '{{json .Config.Entrypoint}}' "$TEST_IMAGE")
+          parent_cmd=$(docker image inspect --format '{{json .Config.Cmd}}' "$AGENT_IMAGE")
+          child_cmd=$(docker image inspect --format '{{json .Config.Cmd}}' "$TEST_IMAGE")
+          test "$child_user" = "$parent_user"
+          test "$child_entrypoint" = "$parent_entrypoint"
+          test "$child_cmd" = "$parent_cmd"
+          case "$child_user" in
+            '"0"'|'"0:0"'|'"root"'|'"root:root"') exit 1 ;;
+          esac
+          docker run --rm \
+            --env EXPECTED_REVISION \
+            --env EXPECTED_IMAGE_IDENTITY \
+            --env EXPECTED_AGENT_IMAGE \
+            --env EXPECTED_AGENT_REPOSITORY \
+            --env EXPECTED_AGENT_REVISION \
+            --entrypoint python3 "$TEST_IMAGE" -c '
+          import importlib.metadata as metadata
+          import json, os, pathlib, pwd
+          marker = json.loads(pathlib.Path("/etc/hermes/image-provenance.json").read_text(encoding="utf-8"))
+          fleet = json.loads(pathlib.Path("/etc/hermes-fleet/image-provenance.json").read_text(encoding="utf-8"))
+          assert marker["revision"] == os.environ["EXPECTED_AGENT_REVISION"], marker
+          assert marker["image"] == os.environ["EXPECTED_AGENT_REPOSITORY"], marker
+          assert marker["version"] == metadata.version("hermes-agent"), marker
+          assert fleet["revision"] == os.environ["EXPECTED_REVISION"], fleet
+          assert fleet["image"] == os.environ["EXPECTED_IMAGE_IDENTITY"], fleet
+          assert fleet["parent_agent_image"] == os.environ["EXPECTED_AGENT_IMAGE"], fleet
+          assert os.environ["HERMES_FLEET_GIT_SHA"] == os.environ["EXPECTED_REVISION"]
+          assert os.environ["HERMES_FLEET_IMAGE_IDENTITY"] == os.environ["EXPECTED_IMAGE_IDENTITY"]
+          assert os.environ["HERMES_FLEET_AGENT_IMAGE"] == os.environ["EXPECTED_AGENT_IMAGE"]
+          assert pwd.getpwnam("hermes").pw_uid != 0
+          assert not pathlib.Path("/var/run/docker.sock").exists()
+          assert pathlib.Path("/opt/hermes-fleet/contracts/image.json").is_file()
+          '
+          docker run --rm --network none "$TEST_IMAGE" python3 -c 'import os; assert os.getuid() != 0'
+          docker run --rm --entrypoint hermes "$TEST_IMAGE" --version
+
+      - name: Generate full image SBOM
+        uses: anchore/sbom-action@3ad7283483fc7af8ff2b4ea19663c2d5ca935e26 # v0.24.2
+        with:
+          image: ${{ env.TEST_IMAGE }}
+          format: spdx-json
+          output-file: fleet-image.spdx.json
+          upload-artifact: false
+
+      - name: Create bounded package SBOM for attestation
+        run: |
+          set -euo pipefail
+          python3 scripts/compact-spdx-sbom.py \
+            --input fleet-image.spdx.json \
+            --output fleet-image.attestation.spdx.json \
+            --max-bytes 16777216
+
+      - name: Scan critical image vulnerabilities
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: ${{ env.TEST_IMAGE }}
+          format: json
+          output: trivy-image.json
+          scanners: vuln
+          severity: CRITICAL
+          ignore-unfixed: true
+          exit-code: 1
+
+      - name: Save exact scanned candidate
+        if: >-
+          github.event_name == 'workflow_dispatch' &&
+          github.event.inputs.publish == 'true' &&
+          github.ref == 'refs/heads/main'
+        run: |
+          set -euo pipefail
+          docker save "$TEST_IMAGE" | gzip -1 > fleet-image.tar.gz
+          test -s fleet-image.tar.gz
+
+      - name: Upload exact scanned candidate
+        if: >-
+          github.event_name == 'workflow_dispatch' &&
+          github.event.inputs.publish == 'true' &&
+          github.ref == 'refs/heads/main'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: fleet-image-candidate-${{ github.sha }}
+          path: |
+            fleet-image.tar.gz
+            fleet-image.spdx.json
+            fleet-image.attestation.spdx.json
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 7
+
+      - name: Upload pre-publication evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: fleet-image-evidence-${{ github.sha }}
+          path: |
+            fleet-image.spdx.json
+            fleet-image.attestation.spdx.json
+            trivy-image.json
+          if-no-files-found: error
+          retention-days: 30
+
+  publish:
+    needs: preflight
+    if: >-
+      github.repository == 'mekenthompson/hermes-fleet-public' &&
+      github.event_name == 'workflow_dispatch' &&
+      github.event.inputs.publish == 'true' &&
+      github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    environment: fleet-image-publish
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+      attestations: write
+    steps:
+      - name: Checkout exact pushed commit
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+
+      - name: Revalidate immutable Agent handoff
+        run: |
+          set -euo pipefail
+          python3 scripts/read-agent-image-manifest.py \
+            --manifest release/agent-image-manifest.json \
+            --github-env "$GITHUB_ENV"
+
+      - name: Download exact scanned candidate
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: fleet-image-candidate-${{ github.sha }}
+
+      - name: Load and verify exact scanned candidate
+        env:
+          EXPECTED_REVISION: ${{ github.sha }}
+          EXPECTED_IMAGE_IDENTITY: ${{ env.IMAGE_REPOSITORY }}
+          EXPECTED_AGENT_IMAGE: ${{ env.AGENT_IMAGE }}
+          EXPECTED_AGENT_REPOSITORY: ${{ env.AGENT_REPOSITORY }}
+          EXPECTED_AGENT_REVISION: ${{ env.AGENT_REVISION }}
+        run: |
+          set -euo pipefail
+          gzip -dc fleet-image.tar.gz | docker load
+          child_user=$(docker image inspect --format '{{json .Config.User}}' "$TEST_IMAGE")
+          case "$child_user" in
+            '"0"'|'"0:0"'|'"root"'|'"root:root"') exit 1 ;;
+          esac
+          docker run --rm \
+            --env EXPECTED_REVISION \
+            --env EXPECTED_IMAGE_IDENTITY \
+            --env EXPECTED_AGENT_IMAGE \
+            --env EXPECTED_AGENT_REPOSITORY \
+            --env EXPECTED_AGENT_REVISION \
+            --entrypoint python3 "$TEST_IMAGE" -c '
+          import importlib.metadata as metadata
+          import json, os, pathlib, pwd
+          marker = json.loads(pathlib.Path("/etc/hermes/image-provenance.json").read_text(encoding="utf-8"))
+          fleet = json.loads(pathlib.Path("/etc/hermes-fleet/image-provenance.json").read_text(encoding="utf-8"))
+          assert marker["revision"] == os.environ["EXPECTED_AGENT_REVISION"], marker
+          assert marker["image"] == os.environ["EXPECTED_AGENT_REPOSITORY"], marker
+          assert marker["version"] == metadata.version("hermes-agent"), marker
+          assert fleet["revision"] == os.environ["EXPECTED_REVISION"], fleet
+          assert fleet["image"] == os.environ["EXPECTED_IMAGE_IDENTITY"], fleet
+          assert fleet["parent_agent_image"] == os.environ["EXPECTED_AGENT_IMAGE"], fleet
+          assert os.environ["HERMES_FLEET_GIT_SHA"] == os.environ["EXPECTED_REVISION"]
+          assert os.environ["HERMES_FLEET_IMAGE_IDENTITY"] == os.environ["EXPECTED_IMAGE_IDENTITY"]
+          assert os.environ["HERMES_FLEET_AGENT_IMAGE"] == os.environ["EXPECTED_AGENT_IMAGE"]
+          assert pwd.getpwnam("hermes").pw_uid != 0
+          assert not pathlib.Path("/var/run/docker.sock").exists()
+          '
+          docker run --rm --network none "$TEST_IMAGE" python3 -c 'import os; assert os.getuid() != 0'
+
+      - name: Log in to GHCR
+        uses: docker/login-action@4907a6ddec9925e35a0a9e82d7399ccc52663121 # v4.1.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+
+      - name: Push exact scanned candidate
+        id: publish
+        run: |
+          set -euo pipefail
+          docker push "$TEST_IMAGE"
+          immutable_ref=$(docker image inspect --format '{{json .RepoDigests}}' "$TEST_IMAGE" | python3 -c '
+          import json, os, sys
+          prefix = os.environ["IMAGE_REPOSITORY"] + "@sha256:"
+          matches = [item for item in json.load(sys.stdin) if item.startswith(prefix)]
+          assert len(matches) == 1, matches
+          print(matches[0])
+          ')
+          digest=${immutable_ref#*@}
+          python3 scripts/emit-fleet-image-manifest.py \
+            --repository "$IMAGE_REPOSITORY" \
+            --revision "${{ github.sha }}" \
+            --digest "$digest" \
+            --agent-manifest release/agent-image-manifest.json \
+            --output fleet-image-handoff.json
+          printf 'digest=%s\n' "$digest" >> "$GITHUB_OUTPUT"
+
+      - name: Attest published digest
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-name: ${{ env.IMAGE_REPOSITORY }}
+          subject-digest: ${{ steps.publish.outputs.digest }}
+          push-to-registry: true
+
+      - name: Attest published SBOM
+        uses: actions/attest-sbom@c604332985a26aa8cf1bdc465b92731239ec6b9e # v4.1.0
+        with:
+          subject-name: ${{ env.IMAGE_REPOSITORY }}
+          subject-digest: ${{ steps.publish.outputs.digest }}
+          sbom-path: fleet-image.attestation.spdx.json
+          push-to-registry: true
+
+      - name: Upload private House handoff manifest
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: fleet-image-handoff-${{ github.sha }}
+          path: fleet-image-handoff.json
+          if-no-files-found: error
+          retention-days: 90

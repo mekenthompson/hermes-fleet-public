@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "status": "public_product_skeleton",
+  "status": "public_release_pipeline",
   "repositories": {
     "agent": {
       "visibility": "public",
@@ -87,7 +87,7 @@
     ]
   },
   "publication": {
-    "implementation_state": "future_release_gate",
+    "implementation_state": "protected_release_workflow",
     "before_production_canary": false,
     "requires_exercised_rollback": true,
     "requires_clean_public_history": true,
