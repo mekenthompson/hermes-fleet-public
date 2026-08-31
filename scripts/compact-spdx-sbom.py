@@ -16,6 +16,53 @@ FILE_DERIVED_PACKAGE_FIELDS = {
     "licenseInfoFromFiles",
     "packageVerificationCode",
 }
+RELATIONSHIP_TYPES = {
+    "AMENDS",
+    "ANCESTOR_OF",
+    "BUILD_DEPENDENCY_OF",
+    "BUILD_TOOL_OF",
+    "CONTAINED_BY",
+    "CONTAINS",
+    "COPY_OF",
+    "DATA_FILE_OF",
+    "DEPENDENCY_MANIFEST_OF",
+    "DEPENDENCY_OF",
+    "DEPENDS_ON",
+    "DESCENDANT_OF",
+    "DESCRIBED_BY",
+    "DESCRIBES",
+    "DEV_DEPENDENCY_OF",
+    "DEV_TOOL_OF",
+    "DISTRIBUTION_ARTIFACT",
+    "DOCUMENTATION_OF",
+    "DYNAMIC_LINK",
+    "EXAMPLE_OF",
+    "EXPANDED_FROM_ARCHIVE",
+    "FILE_ADDED",
+    "FILE_DELETED",
+    "FILE_MODIFIED",
+    "GENERATED_FROM",
+    "GENERATES",
+    "HAS_PREREQUISITE",
+    "METAFILE_OF",
+    "OPTIONAL_COMPONENT_OF",
+    "OPTIONAL_DEPENDENCY_OF",
+    "OTHER",
+    "PACKAGE_OF",
+    "PATCH_APPLIED",
+    "PATCH_FOR",
+    "PREREQUISITE_FOR",
+    "PROVIDED_DEPENDENCY_OF",
+    "REQUIREMENT_DESCRIPTION_FOR",
+    "RUNTIME_DEPENDENCY_OF",
+    "SPECIFICATION_FOR",
+    "STATIC_LINK",
+    "TEST_CASE_OF",
+    "TEST_DEPENDENCY_OF",
+    "TEST_OF",
+    "TEST_TOOL_OF",
+    "VARIANT_OF",
+}
 
 
 def parse_args() -> argparse.Namespace:
@@ -30,6 +77,45 @@ def validate_spdx_id(value: object, label: str) -> str:
     if not isinstance(value, str) or SPDX_ID_PATTERN.fullmatch(value) is None:
         raise SystemExit(f"invalid SPDXID for {label}: {value!r}")
     return value
+
+
+def require_nonempty_string(mapping: dict[str, object], field: str, label: str) -> str:
+    value = mapping.get(field)
+    if not isinstance(value, str) or not value:
+        raise SystemExit(f"{label} {field} must be a non-empty string")
+    return value
+
+
+def validate_document_semantics(document: object) -> dict[str, object]:
+    if not isinstance(document, dict):
+        raise SystemExit("SPDX document must be an object")
+    if document.get("spdxVersion") != "SPDX-2.3":
+        raise SystemExit("SPDX spdxVersion must be SPDX-2.3")
+    if document.get("dataLicense") != "CC0-1.0":
+        raise SystemExit("SPDX dataLicense must be CC0-1.0")
+    require_nonempty_string(document, "name", "SPDX document")
+    require_nonempty_string(document, "documentNamespace", "SPDX document")
+    creation_info = document.get("creationInfo")
+    if not isinstance(creation_info, dict):
+        raise SystemExit("SPDX creationInfo must be an object")
+    require_nonempty_string(creation_info, "created", "SPDX creationInfo")
+    creators = creation_info.get("creators")
+    if not isinstance(creators, list) or not creators or not all(isinstance(item, str) and item for item in creators):
+        raise SystemExit("SPDX creationInfo creators must be a non-empty array of strings")
+    return document
+
+
+def validate_package_semantics(package: dict[str, object], index: int) -> None:
+    require_nonempty_string(package, "name", f"SPDX package {index}")
+    require_nonempty_string(package, "downloadLocation", f"SPDX package {index}")
+
+
+def validate_relationship_semantics(relationship: dict[str, object], index: int) -> None:
+    require_nonempty_string(relationship, "spdxElementId", f"SPDX relationship {index}")
+    require_nonempty_string(relationship, "relatedSpdxElement", f"SPDX relationship {index}")
+    relationship_type = require_nonempty_string(relationship, "relationshipType", f"SPDX relationship {index}")
+    if relationship_type not in RELATIONSHIP_TYPES:
+        raise SystemExit(f"invalid SPDX relationshipType: {relationship_type!r}")
 
 
 def find_removed_reference(value: object, removed_ids: set[str], path: str = "$") -> str | None:
@@ -53,7 +139,7 @@ def main() -> int:
     if args.max_bytes <= 0:
         raise SystemExit("--max-bytes must be positive")
 
-    document = json.loads(args.input.read_text(encoding="utf-8"))
+    document = validate_document_semantics(json.loads(args.input.read_text(encoding="utf-8")))
     packages = document.get("packages")
     files = document.get("files")
     relationships = document.get("relationships")
@@ -68,12 +154,15 @@ def main() -> int:
     document_id = validate_spdx_id(document_id, "document")
     if not all(isinstance(relationship, dict) for relationship in relationships):
         raise SystemExit("SPDX relationships must be objects")
+    for index, relationship in enumerate(relationships):
+        validate_relationship_semantics(relationship, index)
 
     compact_packages = []
     package_ids: set[str] = set()
     for index, package in enumerate(packages):
         if not isinstance(package, dict):
             raise SystemExit("SPDX packages must be objects")
+        validate_package_semantics(package, index)
         package_id = validate_spdx_id(package.get("SPDXID"), f"package {index}")
         if package_id in package_ids:
             raise SystemExit("package SPDXIDs must be present and unique")

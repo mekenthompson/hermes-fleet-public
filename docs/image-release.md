@@ -4,7 +4,7 @@ The public Fleet image is a minimal child of the **exact Agent digest** recorded
 
 ## Transaction
 
-Pull requests and manual validation runs build one `linux/amd64` candidate from the exact Fleet source revision. Preflight verifies the pinned Agent handoff, inherited Agent provenance marker and installed Hermes version, Fleet revision and image identity, inherited runtime user/entrypoint/command, non-root `hermes` uid, absence of a Docker socket, full SPDX evidence, bounded package-level SPDX, and the critical-vulnerability gate.
+Pull requests and manual validation runs build one `linux/amd64` candidate from the exact Fleet source revision. Preflight verifies the pinned Agent handoff, inherited Agent provenance marker and installed Hermes version, Fleet revision and image identity, inherited runtime user/entrypoint/command, non-root `hermes` workload execution, absence of a Docker socket, full SPDX evidence, bounded package-level SPDX, official SPDX 2.3 schema validity through a fully hashed validator lock, and the critical-vulnerability gate.
 
 A `publish=true` dispatch from `main` exports that candidate. The protected `fleet-image-publish` job downloads, loads, and re-verifies the same candidate, then pushes it **without rebuilding**. Publication attaches SLSA build provenance and the bounded package-level SPDX document to the resulting digest. The full SPDX and scanner report remain pre-publication evidence.
 
