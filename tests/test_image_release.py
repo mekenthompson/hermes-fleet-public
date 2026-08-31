@@ -21,7 +21,17 @@ AGENT_REF = f"{AGENT_REPOSITORY}@{AGENT_DIGEST}"
 
 class FleetImageReleaseTests(unittest.TestCase):
     def test_release_files_exist(self) -> None:
-        for path in (WORKFLOW, AGENT_MANIFEST, READ_MANIFEST, EMIT_MANIFEST, COMPACT_SBOM, ROOT / "docs/image-release.md"):
+        for path in (
+            WORKFLOW,
+            AGENT_MANIFEST,
+            READ_MANIFEST,
+            EMIT_MANIFEST,
+            COMPACT_SBOM,
+            ROOT / "scripts/validate-spdx-schema.py",
+            ROOT / "release/spdx-2.3-schema.json",
+            ROOT / "release/spdx-validation-requirements.txt",
+            ROOT / "docs/image-release.md",
+        ):
             with self.subTest(path=path):
                 self.assertTrue(path.is_file())
 
@@ -188,18 +198,38 @@ class FleetImageReleaseTests(unittest.TestCase):
     def test_compact_sbom_removes_file_surfaces_and_is_deterministic(self) -> None:
         document = {
             "spdxVersion": "SPDX-2.3",
+            "dataLicense": "CC0-1.0",
             "SPDXID": "SPDXRef-DOCUMENT",
+            "name": "valid fixture",
+            "documentNamespace": "https://example.invalid/spdx/valid-fixture",
+            "creationInfo": {
+                "created": "2026-08-31T00:00:00Z",
+                "creators": ["Tool: hermes-fleet-test"],
+            },
             "documentDescribes": ["SPDXRef-Package-a", "SPDXRef-File-a"],
             "packages": [{
                 "name": "a",
                 "SPDXID": "SPDXRef-Package-a",
+                "downloadLocation": "NOASSERTION",
                 "filesAnalyzed": True,
                 "hasFiles": ["SPDXRef-File-a"],
                 "licenseInfoFromFiles": ["MIT"],
                 "packageVerificationCode": {"packageVerificationCodeValue": "abc"},
             }],
-            "files": [{"SPDXID": "SPDXRef-File-a", "fileName": "/a"}],
-            "snippets": [{"SPDXID": "SPDXRef-Snippet-a"}],
+            "files": [{
+                "SPDXID": "SPDXRef-File-a",
+                "fileName": "/a",
+                "checksums": [{"algorithm": "SHA256", "checksumValue": "0" * 64}],
+            }],
+            "snippets": [{
+                "SPDXID": "SPDXRef-Snippet-a",
+                "name": "snippet a",
+                "snippetFromFile": "SPDXRef-File-a",
+                "ranges": [{
+                    "startPointer": {"reference": "SPDXRef-File-a", "offset": 0},
+                    "endPointer": {"reference": "SPDXRef-File-a", "offset": 1},
+                }],
+            }],
             "relationships": [
                 {"spdxElementId": "SPDXRef-DOCUMENT", "relationshipType": "DESCRIBES", "relatedSpdxElement": "SPDXRef-Package-a"},
                 {"spdxElementId": "SPDXRef-Package-a", "relationshipType": "CONTAINS", "relatedSpdxElement": "SPDXRef-File-a"},
@@ -251,6 +281,77 @@ class FleetImageReleaseTests(unittest.TestCase):
                 self.assertNotEqual(result.returncode, 0)
                 self.assertFalse(output.exists())
                 self.assertNotIn("Traceback", result.stderr)
+
+    def test_compact_sbom_rejects_required_field_and_enum_violations(self) -> None:
+        valid = {
+            "spdxVersion": "SPDX-2.3",
+            "dataLicense": "CC0-1.0",
+            "SPDXID": "SPDXRef-DOCUMENT",
+            "name": "valid fixture",
+            "documentNamespace": "https://example.invalid/spdx/semantic-fixture",
+            "creationInfo": {
+                "created": "2026-08-31T00:00:00Z",
+                "creators": ["Tool: hermes-fleet-test"],
+            },
+            "packages": [{
+                "SPDXID": "SPDXRef-Package-a",
+                "name": "a",
+                "downloadLocation": "NOASSERTION",
+                "filesAnalyzed": False,
+            }],
+            "files": [],
+            "snippets": [],
+            "relationships": [{
+                "spdxElementId": "SPDXRef-DOCUMENT",
+                "relationshipType": "DESCRIBES",
+                "relatedSpdxElement": "SPDXRef-Package-a",
+            }],
+        }
+        cases = []
+        missing_name = json.loads(json.dumps(valid))
+        missing_name.pop("name")
+        cases.append(missing_name)
+        missing_creators = json.loads(json.dumps(valid))
+        missing_creators["creationInfo"].pop("creators")
+        cases.append(missing_creators)
+        missing_download = json.loads(json.dumps(valid))
+        missing_download["packages"][0].pop("downloadLocation")
+        cases.append(missing_download)
+        bad_relationship = json.loads(json.dumps(valid))
+        bad_relationship["relationships"][0]["relationshipType"] = "NOT_A_SPDX_REL"
+        cases.append(bad_relationship)
+        wrong_version = json.loads(json.dumps(valid))
+        wrong_version["spdxVersion"] = "SPDX-2.2"
+        cases.append(wrong_version)
+
+        for document in cases:
+            with self.subTest(document=document), tempfile.TemporaryDirectory() as directory:
+                source = Path(directory) / "full.json"
+                output = Path(directory) / "compact.json"
+                source.write_text(json.dumps(document), encoding="utf-8")
+                result = subprocess.run(
+                    ["python3", str(COMPACT_SBOM), "--input", str(source), "--output", str(output)],
+                    cwd=ROOT,
+                    text=True,
+                    capture_output=True,
+                    check=False,
+                )
+                self.assertNotEqual(result.returncode, 0)
+                self.assertFalse(output.exists())
+                self.assertNotIn("Traceback", result.stderr)
+
+    def test_workflow_validates_full_and_compact_documents_against_official_schema(self) -> None:
+        text = WORKFLOW.read_text(encoding="utf-8")
+        for token in (
+            "release/spdx-2.3-schema.json",
+            "release/spdx-validation-requirements.txt",
+            "--require-hashes",
+            "scripts/validate-spdx-schema.py",
+            "fleet-image.spdx.json",
+            "fleet-image.attestation.spdx.json",
+        ):
+            self.assertIn(token, text)
+        self.assertLess(text.index("Validate full and compact SPDX 2.3 documents"), text.index("Save exact scanned candidate"))
 
     def test_release_documentation_states_boundaries(self) -> None:
         text = (ROOT / "docs/image-release.md").read_text(encoding="utf-8").lower()

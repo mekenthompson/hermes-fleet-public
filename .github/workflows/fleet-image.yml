@@ -128,6 +128,27 @@ jobs:
             --output fleet-image.attestation.spdx.json \
             --max-bytes 16777216
 
+      - name: Set up Python for SPDX schema validation
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
+        with:
+          python-version: "3.13"
+
+      - name: Install pinned SPDX schema validator
+        run: |
+          set -euo pipefail
+          python3 -m pip install \
+            --disable-pip-version-check \
+            --require-hashes \
+            --requirement release/spdx-validation-requirements.txt
+
+      - name: Validate full and compact SPDX 2.3 documents
+        run: |
+          set -euo pipefail
+          python3 scripts/validate-spdx-schema.py \
+            --schema release/spdx-2.3-schema.json \
+            fleet-image.spdx.json \
+            fleet-image.attestation.spdx.json
+
       - name: Scan critical image vulnerabilities
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
