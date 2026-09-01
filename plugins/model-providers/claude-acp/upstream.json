@@ -1,0 +1,9 @@
+{
+  "license": "MIT",
+  "license_file": "UPSTREAM_LICENSE",
+  "license_sha256": "3522fd8996b0a9759df1daf7846dd7b3d4c4aa934e776089d2897dd049f4c689",
+  "source_repository": "https://github.com/mvdbastos/hermes-acp-agents",
+  "source_revision": "0526610a3945cc376ac517b63ca358a5b838a2fc",
+  "upstream_init_sha256": "ff1c5505711c4562c755106f61c4074c6cd6d470ea573a60a937a7e73b9db56e",
+  "upstream_plugin_yaml_sha256": "e1dd416295af66cefc1ba67812d359f02f9d1132f4a5f89a28d019797c6da00f"
+}
