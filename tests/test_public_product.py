@@ -37,6 +37,9 @@ class PublicProductTests(unittest.TestCase):
             "docs/image-release.md",
             "package.json",
             "package-lock.json",
+            "plugins/model-providers/claude-acp/__init__.py",
+            "plugins/model-providers/claude-acp/plugin.yaml",
+            "plugins/model-providers/claude-acp/upstream.json",
         ):
             with self.subTest(relative=relative):
                 self.assertTrue((ROOT / relative).is_file())
@@ -76,6 +79,8 @@ class PublicProductTests(unittest.TestCase):
         self.assertIn("npm ci --omit=dev --prefix /opt/coding-clis", text)
         self.assertIn("--ignore-scripts", text)
         self.assertIn("node /opt/coding-clis/node_modules/@anthropic-ai/claude-code/install.cjs", text)
+        self.assertIn("/usr/local/bin/claude-agent-acp", text)
+        self.assertIn("plugins/model-providers/claude-acp", text)
         self.assertIn("DISABLE_AUTOUPDATER=1", text)
         self.assertIn("scripts/image_ref.py /opt/hermes-fleet/bin/image_ref.py", text)
         self.assertIn("scripts/verify-agent-image-ref.py /opt/hermes-fleet/bin/verify-agent-image-ref", text)
@@ -123,6 +128,34 @@ class PublicProductTests(unittest.TestCase):
             with self.subTest(prohibited=prohibited):
                 self.assertNotIn(prohibited, contract_text)
         self.assertEqual(image["publication"]["implementation_state"], "protected_release_workflow")
+
+    def test_tracked_public_text_has_no_household_profile_identities(self) -> None:
+        tracked = subprocess.check_output(
+            ["git", "ls-files", "-z"],
+            cwd=ROOT,
+        ).split(b"\0")
+        prohibited = (
+            "car" + "rie",
+            "over" + "lord",
+            "klank" + "er",
+            "gr" + "unt",
+            "cl" + "erk",
+            "gym" + "bro",
+            "mar" + "ko",
+            "law" + "gpt",
+            "ag" + "gie",
+        )
+        for raw_path in tracked:
+            if not raw_path:
+                continue
+            relative = raw_path.decode("utf-8")
+            data = (ROOT / relative).read_bytes()
+            if b"\0" in data:
+                continue
+            text = data.decode("utf-8", errors="ignore").lower()
+            for identity in prohibited:
+                with self.subTest(path=relative, identity=identity):
+                    self.assertNotIn(identity, text)
 
     def test_immutable_reference_wrappers_reject_mutable_images(self) -> None:
         digest = "0123456789abcdef" * 4
