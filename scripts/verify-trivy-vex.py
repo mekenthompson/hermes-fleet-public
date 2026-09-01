@@ -170,14 +170,33 @@ def main() -> None:
     policy = load_object(args.policy, "VEX policy")
     report = load_object(args.trivy, "Trivy report")
     exceptions = validate_policy(policy, now)
+    binary_sha256 = hashlib.sha256(binary).hexdigest()
+    for item in exceptions:
+        if args.component_image != item["component_image"]:
+            fail("1Password component image does not match VEX")
+        if binary_sha256 != item["binary_sha256"]:
+            fail("op binary SHA-256 does not match VEX")
+        present = [
+            symbol
+            for symbol in item["affected_symbols"]
+            if symbol.encode("ascii") in binary
+        ]
+        if present:
+            fail(f"affected symbol present in op binary: {present[0]}")
+
     by_vulnerability = {item["vulnerability_id"]: item for item in exceptions}
     findings = critical_findings(report)
     excepted: list[str] = []
+    seen_vulnerabilities: set[str] = set()
 
     for finding in findings:
-        item = by_vulnerability.get(finding["vulnerability_id"])
+        vulnerability_id = finding["vulnerability_id"]
+        if vulnerability_id in seen_vulnerabilities:
+            fail(f"duplicate critical vulnerability finding: {vulnerability_id}")
+        seen_vulnerabilities.add(vulnerability_id)
+        item = by_vulnerability.get(vulnerability_id)
         if item is None:
-            fail(f"unexcepted critical vulnerability: {finding['vulnerability_id']}")
+            fail(f"unexcepted critical vulnerability: {vulnerability_id}")
         expected_finding = {
             "vulnerability_id": item["vulnerability_id"],
             "package": item["package"],
@@ -190,16 +209,8 @@ def main() -> None:
             "target_type": item["target_type"],
         }
         if finding != expected_finding:
-            fail(f"critical finding does not exactly match VEX: {finding['vulnerability_id']}")
-        if args.component_image != item["component_image"]:
-            fail("1Password component image does not match VEX")
-        binary_sha256 = hashlib.sha256(binary).hexdigest()
-        if binary_sha256 != item["binary_sha256"]:
-            fail("op binary SHA-256 does not match VEX")
-        present = [symbol for symbol in item["affected_symbols"] if symbol.encode("ascii") in binary]
-        if present:
-            fail(f"affected symbol present in op binary: {present[0]}")
-        excepted.append(item["vulnerability_id"])
+            fail(f"critical finding does not exactly match VEX: {vulnerability_id}")
+        excepted.append(vulnerability_id)
 
     evaluation = {
         "schema_version": 1,

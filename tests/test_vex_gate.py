@@ -93,6 +93,27 @@ class TrivyVexGateTests(unittest.TestCase):
             self.assertEqual(evaluation["decision"], "pass")
             self.assertEqual(evaluation["excepted_vulnerabilities"], ["CVE-2026-56854"])
 
+    def test_empty_report_still_binds_candidate_binary_and_component(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            directory = Path(raw)
+            policy, report, output = self.fixture(directory)
+            report.write_text(json.dumps({"SchemaVersion": 2, "Results": []}), encoding="utf-8")
+            binary = directory / "op"
+            binary.write_bytes(b"tampered executable")
+            result = self.run_gate(policy, report, binary, output)
+            self.assertNotEqual(result.returncode, 0)
+
+    def test_duplicate_matching_finding_fails(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            directory = Path(raw)
+            policy, report, output = self.fixture(directory)
+            data = json.loads(report.read_text(encoding="utf-8"))
+            finding = dict(data["Results"][0]["Vulnerabilities"][0])
+            data["Results"][0]["Vulnerabilities"].append(finding)
+            report.write_text(json.dumps(data), encoding="utf-8")
+            result = self.run_gate(policy, report, directory / "op", output)
+            self.assertNotEqual(result.returncode, 0)
+
     def test_every_bound_value_and_expiry_fail_closed(self) -> None:
         mutations = {
             "vulnerability_id": "CVE-2026-00000",
