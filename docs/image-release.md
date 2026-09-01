@@ -18,7 +18,13 @@ This workflow performs **no production deployment**. It does not modify profile 
 
 ## Approval
 
-Only `main` may enter `fleet-image-publish`. Review the exact preflight source SHA, Agent digest, runtime checks, full SPDX, compact SPDX, and Trivy result before approving.
+Only `main` may enter `fleet-image-publish`. Review the exact preflight source SHA, Agent digest, runtime checks, full SPDX, compact SPDX, Trivy result, and any VEX evaluation before approving.
+
+### Scoped VEX handling
+
+Trivy always runs and its full JSON report is retained. Critical findings fail the release unless `scripts/verify-trivy-vex.py` matches the finding to an unexpired, reviewed record in `release/vex-exceptions.json`. A record is bound to the exact vulnerability, package and versions, scanner target and type, immutable component image, executable SHA-256, approval, expiry, and the advisory's affected symbols. The gate extracts the executable from the built Fleet candidate and fails if its hash changes or an affected symbol is present. It runs both before saving the candidate and again before publication. Unknown critical findings, malformed policies, changed artifacts, expired records, or additional critical findings fail closed.
+
+The current KEN-275 record covers only `GO-2026-6303` / `CVE-2026-56854` in the digest-pinned 1Password CLI 2.39.0 executable. It is classified `not_affected` because the advisory's SSH server symbols are absent and Fleet uses `op read` as a client. The record expires on 1 October 2026 and must be removed when 1Password ships a fixed executable.
 
 ## Rollback
 

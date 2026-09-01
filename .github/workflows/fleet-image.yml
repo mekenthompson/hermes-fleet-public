@@ -202,7 +202,19 @@ jobs:
           scanners: vuln
           severity: CRITICAL
           ignore-unfixed: true
-          exit-code: 1
+          exit-code: 0
+
+      - name: Enforce critical findings and scoped VEX policy
+        run: |
+          set -euo pipefail
+          docker run --rm --entrypoint cat "$TEST_IMAGE" /usr/local/bin/op > op-vex.bin
+          test -s op-vex.bin
+          python3 scripts/verify-trivy-vex.py \
+            --trivy trivy-image.json \
+            --policy release/vex-exceptions.json \
+            --binary op-vex.bin \
+            --component-image "$ONEPASSWORD_CLI_IMAGE" \
+            --output vex-evaluation.json
 
       - name: Save exact scanned candidate
         if: >-
@@ -226,6 +238,9 @@ jobs:
             fleet-image.tar.gz
             fleet-image.spdx.json
             fleet-image.attestation.spdx.json
+            trivy-image.json
+            vex-evaluation.json
+            release/vex-exceptions.json
           if-no-files-found: error
           compression-level: 0
           retention-days: 7
@@ -239,7 +254,9 @@ jobs:
             fleet-image.spdx.json
             fleet-image.attestation.spdx.json
             trivy-image.json
-          if-no-files-found: warn
+            vex-evaluation.json
+            release/vex-exceptions.json
+          if-no-files-found: error
           retention-days: 30
 
   publish:
@@ -352,6 +369,18 @@ jobs:
           assert not pathlib.Path("/var/run/docker.sock").exists()
           '
           docker run --rm --network none "$TEST_IMAGE" python3 -c 'import os; assert os.getuid() != 0'
+
+      - name: Revalidate scoped VEX decision before publication
+        run: |
+          set -euo pipefail
+          docker run --rm --entrypoint cat "$TEST_IMAGE" /usr/local/bin/op > op-vex-publish.bin
+          test -s op-vex-publish.bin
+          python3 scripts/verify-trivy-vex.py \
+            --trivy trivy-image.json \
+            --policy release/vex-exceptions.json \
+            --binary op-vex-publish.bin \
+            --component-image "$ONEPASSWORD_CLI_IMAGE" \
+            --output vex-publish-evaluation.json
 
       - name: Push exact scanned candidate
         id: publish
