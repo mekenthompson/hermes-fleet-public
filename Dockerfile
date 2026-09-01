@@ -20,7 +20,7 @@ ENV HERMES_FLEET_GIT_SHA=${FLEET_GIT_SHA} \
     HERMES_FLEET_CLAUDE_ACP_PLUGIN_SOURCE=${CLAUDE_ACP_PLUGIN_SOURCE} \
     HERMES_FLEET_CLAUDE_ACP_PLUGIN_REVISION=${CLAUDE_ACP_PLUGIN_REVISION} \
     DISABLE_AUTOUPDATER=1
-LABEL org.opencontainers.image.source="https://github.com/mekenthompson/hermes-fleet-public" \
+LABEL org.opencontainers.image.source="https://github.com/mekenthompson/hermes-fleet" \
       org.opencontainers.image.revision="${FLEET_GIT_SHA}" \
       org.opencontainers.image.base.name="${AGENT_IMAGE}"
 

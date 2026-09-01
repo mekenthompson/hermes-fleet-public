@@ -28,7 +28,7 @@ env:
 
 jobs:
   preflight:
-    if: github.repository == 'mekenthompson/hermes-fleet-public'
+    if: github.repository == 'mekenthompson/hermes-fleet-public' || github.repository == 'mekenthompson/hermes-fleet'
     runs-on: ubuntu-latest
     timeout-minutes: 60
     permissions:
@@ -245,7 +245,8 @@ jobs:
   publish:
     needs: preflight
     if: >-
-      github.repository == 'mekenthompson/hermes-fleet-public' &&
+      (github.repository == 'mekenthompson/hermes-fleet-public' ||
+      github.repository == 'mekenthompson/hermes-fleet') &&
       github.event_name == 'workflow_dispatch' &&
       github.event.inputs.publish == 'true' &&
       github.ref == 'refs/heads/main'

@@ -250,6 +250,8 @@ class FleetImageReleaseTests(unittest.TestCase):
         self.assertIn("workflow_dispatch:", text)
         self.assertNotRegex(text, r"(?m)^\s*push:\s*$")
         self.assertIn("github.repository == 'mekenthompson/hermes-fleet-public'", text)
+        self.assertIn("github.repository == 'mekenthompson/hermes-fleet'", text)
+        self.assertIn("ghcr.io/mekenthompson/hermes-fleet-public", text)
         self.assertIn("github.ref == 'refs/heads/main'", text)
         self.assertIn("environment: fleet-image-publish", text)
         self.assertIn("platforms: linux/amd64", text)
@@ -365,7 +367,7 @@ class FleetImageReleaseTests(unittest.TestCase):
             data = json.loads(output.read_text(encoding="utf-8"))
             self.assertEqual(data["schema_version"], 1)
             self.assertEqual(data["fleet"]["immutable_ref"], f"ghcr.io/mekenthompson/hermes-fleet-public@{digest}")
-            self.assertEqual(data["fleet"]["source_repository"], "https://github.com/mekenthompson/hermes-fleet-public")
+            self.assertEqual(data["fleet"]["source_repository"], "https://github.com/mekenthompson/hermes-fleet")
             self.assertEqual(data["agent"]["immutable_ref"], AGENT_REF)
             self.assertEqual(output.read_text(encoding="utf-8"), json.dumps(data, indent=2, sort_keys=True) + "\n")
 
