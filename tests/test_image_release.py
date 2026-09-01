@@ -323,6 +323,22 @@ class FleetImageReleaseTests(unittest.TestCase):
         self.assertNotIn("docker/build-push-action@", publish)
         self.assertIn("Load and verify exact scanned candidate", publish)
 
+    def test_critical_scan_remains_mandatory_and_vex_is_revalidated(self) -> None:
+        text = WORKFLOW.read_text(encoding="utf-8")
+        scan = text.index("- name: Scan critical image vulnerabilities")
+        gate = text.index("- name: Enforce critical findings and scoped VEX policy")
+        save = text.index("- name: Save exact scanned candidate")
+        publish_verify = text.index("- name: Revalidate scoped VEX decision before publication")
+        push = text.index("- name: Push exact scanned candidate")
+        self.assertLess(scan, gate)
+        self.assertLess(gate, save)
+        self.assertLess(publish_verify, push)
+        self.assertIn("aquasecurity/trivy-action@", text)
+        self.assertIn("severity: CRITICAL", text)
+        self.assertIn("scripts/verify-trivy-vex.py", text)
+        self.assertIn("release/vex-exceptions.json", text)
+        self.assertGreaterEqual(text.count("vex-evaluation.json"), 3)
+
     def test_release_preserves_full_evidence_and_attests_bounded_sbom(self) -> None:
         text = WORKFLOW.read_text(encoding="utf-8")
         for token in (
