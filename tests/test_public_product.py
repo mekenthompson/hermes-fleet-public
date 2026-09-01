@@ -52,15 +52,34 @@ class PublicProductTests(unittest.TestCase):
         ).split()
         self.assertEqual(roots, ["4dbbe890715aec58a04fd376559a97fa300e9486"])
         git_metadata = ROOT / ".git"
-        # GitHub checkouts and linked worktrees have a remote by design. The
-        # original local publication candidate must remain remote-free.
+        # GitHub Actions and linked worktrees carry remotes by design.
         if os.environ.get("GITHUB_ACTIONS") or git_metadata.is_file():
             return
-        config = (git_metadata / "config").read_text(encoding="utf-8")
-        self.assertNotIn('[remote "', config)
+        remotes = subprocess.run(
+            ["git", "config", "--get-regexp", r"^remote\..*\.url$"],
+            cwd=ROOT,
+            text=True,
+            capture_output=True,
+            check=False,
+        ).stdout.splitlines()
+        if not remotes:
+            return
+        self.assertEqual(len(remotes), 1)
+        _, remote_url = remotes[0].split(maxsplit=1)
+        self.assertIn(
+            remote_url,
+            {
+                "https://github.com/mekenthompson/hermes-fleet-public.git",
+                "https://github.com/mekenthompson/hermes-fleet.git",
+            },
+        )
 
     def test_dockerfile_is_a_minimal_digest_parameterized_child(self) -> None:
         text = (ROOT / "Dockerfile").read_text(encoding="utf-8")
+        self.assertIn(
+            'org.opencontainers.image.source="https://github.com/mekenthompson/hermes-fleet"',
+            text,
+        )
         op_image = (
             "docker.io/1password/op@"
             "sha256:d7d12b409ec699c9fa139d3bdfc80671f744380d39db8c539d9dc6e7e553d3c1"

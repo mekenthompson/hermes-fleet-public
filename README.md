@@ -35,11 +35,19 @@ Direct `docker build` and `docker compose` calls bypass the immutable-reference 
 
 The protected Fleet image workflow builds from the exact Agent handoff in `release/agent-image-manifest.json`. Pull requests run a non-publishing build, runtime/provenance verification, full and bounded SPDX generation, and Trivy critical-vulnerability gate. A manual `publish=true` dispatch from `main` promotes that exact scanned candidate without rebuilding.
 
+Release source repository:
+
+```text
+https://github.com/mekenthompson/hermes-fleet
+```
+
 Release image repository:
 
 ```text
 ghcr.io/mekenthompson/hermes-fleet-public
 ```
+
+The GitHub repository uses the canonical product name. The existing GHCR package retains `hermes-fleet-public` so previously published immutable references remain valid.
 
 Consume release outputs only by immutable digest. The authenticated House handoff artifact records the Fleet source/digest and its exact Agent parent. Image publication does not deploy profiles or authorize production rollout. See [`docs/image-release.md`](docs/image-release.md).
 
