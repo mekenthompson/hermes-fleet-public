@@ -11,6 +11,7 @@ This repository publishes a minimal, provenance-bound Fleet child image through 
 - Run one container, writable state volume, workspace volume, and Docker network per profile.
 - Keep Docker socket, host networking, host bridges, privileged mode, credentials, identities, sessions, memories, and deployment topology out of the public image.
 - Keep optional integrations as standalone plugins, disabled by default.
+- Bundle generic Linear Agent executable code while requiring deployment policy as a separate read-only data mount.
 
 ## Supported local commands
 
@@ -68,3 +69,5 @@ The Phase 2 Compose file demonstrates volume and network separation only. Runtim
 The managed files under `examples/` demonstrate a small administrator overlay. They are not a security boundary and contain no secrets. Mutable Hermes configuration remains in each profile's `/opt/data/config.yaml`.
 
 See `contracts/` for the machine-readable architecture boundaries.
+
+The optional Linear Agent worker is documented in [`docs/linear-agent.md`](docs/linear-agent.md). Its executable code is part of the attested image; deployment policy remains external.
