@@ -40,6 +40,9 @@ class PublicProductTests(unittest.TestCase):
             "plugins/model-providers/claude-acp/__init__.py",
             "plugins/model-providers/claude-acp/plugin.yaml",
             "plugins/model-providers/claude-acp/upstream.json",
+            "plugins/web/perplexity/__init__.py",
+            "plugins/web/perplexity/plugin.yaml",
+            "plugins/web/perplexity/provider.py",
             "plugins/linear-agent/__init__.py",
             "plugins/linear-agent/linear_activity.py",
             "plugins/linear-agent/linear_agent.py",
@@ -47,6 +50,7 @@ class PublicProductTests(unittest.TestCase):
             "plugins/linear-agent/linear_oauth.py",
             "plugins/linear-agent/linear_runtime.py",
             "plugins/linear-agent/plugin.yaml",
+            "docs/perplexity.md",
             "docs/linear-agent.md",
             "examples/linear-agent-policy.json",
         ):

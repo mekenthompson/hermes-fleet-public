@@ -159,6 +159,21 @@ jobs:
           sys.modules[spec.name] = linear_module
           spec.loader.exec_module(linear_module)
           assert callable(linear_module.register)
+          perplexity_plugin = pathlib.Path("/opt/hermes/plugins/web/perplexity")
+          assert pathlib.Path("/opt/hermes/plugins/web/perplexity/provider.py").is_file()
+          perplexity_spec = importlib.util.spec_from_file_location(
+              "hermes_plugins.web.perplexity_release",
+              perplexity_plugin / "__init__.py",
+              submodule_search_locations=[str(perplexity_plugin)],
+          )
+          assert perplexity_spec is not None and perplexity_spec.loader is not None
+          perplexity_module = importlib.util.module_from_spec(perplexity_spec)
+          sys.modules[perplexity_spec.name] = perplexity_module
+          perplexity_spec.loader.exec_module(perplexity_module)
+          perplexity = perplexity_module.PerplexityWebSearchProvider()
+          assert perplexity.name == "perplexity"
+          assert perplexity.supports_search() and not perplexity.supports_extract()
+          assert not perplexity.is_available()
           from providers import get_provider_profile
           from agent.acp_agent_registry import resolve_agent_launch
           profile = get_provider_profile("claude-acp")
@@ -392,6 +407,21 @@ jobs:
           sys.modules[spec.name] = linear_module
           spec.loader.exec_module(linear_module)
           assert callable(linear_module.register)
+          perplexity_plugin = pathlib.Path("/opt/hermes/plugins/web/perplexity")
+          assert pathlib.Path("/opt/hermes/plugins/web/perplexity/provider.py").is_file()
+          perplexity_spec = importlib.util.spec_from_file_location(
+              "hermes_plugins.web.perplexity_release",
+              perplexity_plugin / "__init__.py",
+              submodule_search_locations=[str(perplexity_plugin)],
+          )
+          assert perplexity_spec is not None and perplexity_spec.loader is not None
+          perplexity_module = importlib.util.module_from_spec(perplexity_spec)
+          sys.modules[perplexity_spec.name] = perplexity_module
+          perplexity_spec.loader.exec_module(perplexity_module)
+          perplexity = perplexity_module.PerplexityWebSearchProvider()
+          assert perplexity.name == "perplexity"
+          assert perplexity.supports_search() and not perplexity.supports_extract()
+          assert not perplexity.is_available()
           from providers import get_provider_profile
           from agent.acp_agent_registry import resolve_agent_launch
           profile = get_provider_profile("claude-acp")

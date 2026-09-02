@@ -11,6 +11,7 @@ This repository publishes a minimal, provenance-bound Fleet child image through 
 - Run one container, writable state volume, workspace volume, and Docker network per profile.
 - Keep Docker socket, host networking, host bridges, privileged mode, credentials, identities, sessions, memories, and deployment topology out of the public image.
 - Keep optional integrations as standalone plugins, disabled by default.
+- Bundle a generic Perplexity Search API provider while requiring its API key from the deployment secret boundary.
 - Bundle generic Linear Agent executable code while requiring deployment policy as a separate read-only data mount.
 
 ## Supported local commands
