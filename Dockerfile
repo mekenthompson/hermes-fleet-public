@@ -35,6 +35,9 @@ RUN npm ci --omit=dev --prefix /opt/coding-clis --ignore-scripts --no-audit --no
     && test "$(node -p 'require("/opt/coding-clis/node_modules/@agentclientprotocol/claude-agent-acp/package.json").version')" = "${CLAUDE_AGENT_ACP_VERSION}" \
     && test -x /usr/local/bin/claude-agent-acp
 COPY plugins/model-providers/claude-acp/ /opt/hermes/plugins/model-providers/claude-acp/
+COPY plugins/web/perplexity/ /opt/hermes/plugins/web/perplexity/
+RUN python3 -m py_compile /opt/hermes/plugins/web/perplexity/*.py \
+    && HERMES_HOME=/tmp/hermes-plugin-doctor /opt/hermes/bin/hermes plugins doctor /opt/hermes/plugins/web/perplexity --ci
 COPY plugins/linear-agent/ /opt/hermes/plugins/linear-agent/
 RUN test ! -e /opt/hermes/plugins/linear-agent/linear-agents.json \
     && python3 -m py_compile /opt/hermes/plugins/linear-agent/*.py
