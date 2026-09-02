@@ -1,0 +1,5 @@
+name: linear-agent
+kind: standalone
+version: 0.1.0
+description: Profile-local Linear Agent Session worker
+author: Hermes Fleet Contributors

@@ -40,6 +40,15 @@ class PublicProductTests(unittest.TestCase):
             "plugins/model-providers/claude-acp/__init__.py",
             "plugins/model-providers/claude-acp/plugin.yaml",
             "plugins/model-providers/claude-acp/upstream.json",
+            "plugins/linear-agent/__init__.py",
+            "plugins/linear-agent/linear_activity.py",
+            "plugins/linear-agent/linear_agent.py",
+            "plugins/linear-agent/linear_connect.py",
+            "plugins/linear-agent/linear_oauth.py",
+            "plugins/linear-agent/linear_runtime.py",
+            "plugins/linear-agent/plugin.yaml",
+            "docs/linear-agent.md",
+            "examples/linear-agent-policy.json",
         ):
             with self.subTest(relative=relative):
                 self.assertTrue((ROOT / relative).is_file())

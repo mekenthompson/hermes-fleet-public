@@ -35,6 +35,9 @@ RUN npm ci --omit=dev --prefix /opt/coding-clis --ignore-scripts --no-audit --no
     && test "$(node -p 'require("/opt/coding-clis/node_modules/@agentclientprotocol/claude-agent-acp/package.json").version')" = "${CLAUDE_AGENT_ACP_VERSION}" \
     && test -x /usr/local/bin/claude-agent-acp
 COPY plugins/model-providers/claude-acp/ /opt/hermes/plugins/model-providers/claude-acp/
+COPY plugins/linear-agent/ /opt/hermes/plugins/linear-agent/
+RUN test ! -e /opt/hermes/plugins/linear-agent/linear-agents.json \
+    && python3 -m py_compile /opt/hermes/plugins/linear-agent/*.py
 COPY scripts/image_ref.py /opt/hermes-fleet/bin/image_ref.py
 COPY --chmod=0755 scripts/verify-agent-image-ref.py /opt/hermes-fleet/bin/verify-agent-image-ref
 COPY contracts/ /opt/hermes-fleet/contracts/
