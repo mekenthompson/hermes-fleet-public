@@ -195,7 +195,10 @@ class FleetImageReleaseTests(unittest.TestCase):
                 "upstream_plugin_yaml_sha256": "e1dd416295af66cefc1ba67812d359f02f9d1132f4a5f89a28d019797c6da00f",
             },
         )
-        self.assertIn('command="claude-agent-acp"', plugin)
+        self.assertIn('process_command="env"', plugin)
+        self.assertIn('process_args=_subscription_safe_args()', plugin)
+        self.assertIn('return (*args, "/usr/local/bin/claude-agent-acp")', plugin)
+        self.assertIn('return CopilotACPClient(**client_kwargs)', plugin)
         self.assertIn('name="claude-acp"', plugin)
         self.assertIn('base_url="acp://claude"', plugin)
         tree = ast.parse(plugin)
@@ -237,6 +240,9 @@ class FleetImageReleaseTests(unittest.TestCase):
         self.assertEqual(ast.literal_eval(profile_keywords["env_vars"]), ("CLAUDE_CODE_OAUTH_TOKEN",))
         self.assertEqual(ast.literal_eval(profile_keywords["auth_type"]), "external_process")
         self.assertEqual(ast.literal_eval(profile_keywords["base_url"]), "acp://claude")
+        self.assertEqual(ast.literal_eval(profile_keywords["process_command"]), "env")
+        self.assertEqual(ast.literal_eval(profile_keywords["process_command_env_vars"]), ())
+        self.assertEqual(ast.literal_eval(profile_keywords["process_args_env_var"]), "")
         self.assertEqual(
             ast.literal_eval(profile_keywords["fallback_models"]),
             ("default", "opus[1m]", "sonnet", "haiku"),
@@ -292,7 +298,7 @@ class FleetImageReleaseTests(unittest.TestCase):
             'pathlib.Path("/opt/coding-clis/node_modules/@agentclientprotocol/claude-agent-acp/package.json")',
             "/opt/hermes/plugins/model-providers/claude-acp/__init__.py",
             'get_provider_profile("claude-acp")',
-            'resolve_agent_launch("claude")',
+            'resolve_external_process_provider_credentials("claude-acp")',
             "docker.sock",
             "scripts/verify-inherited-runtime-config.py",
             "os.getuid() != 0",

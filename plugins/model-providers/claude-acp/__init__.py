@@ -6,7 +6,9 @@ fails closed to the Claude subscription login by removing API, proxy,
 cloud-provider, and model-override environment variables before launch.
 """
 
-from agent.acp_agent_registry import ACPAgentEntry, register_acp_agent
+from typing import Any
+
+from agent.copilot_acp_client import CopilotACPClient
 from providers import register_provider
 from providers.base import ProviderProfile
 
@@ -39,19 +41,21 @@ _SUBSCRIPTION_SAFETY_UNSET = (
     "CLAUDE_CODE_SUBAGENT_MODEL",
 )
 
-register_acp_agent(
-    "claude",
-    ACPAgentEntry(
-        command="claude-agent-acp",
-        env_unset=_SUBSCRIPTION_SAFETY_UNSET,
-        display_name="Claude Code",
-        install_hint="Install @agentclientprotocol/claude-agent-acp 0.70.0.",
-    ),
-)
+
+def _subscription_safe_args() -> tuple[str, ...]:
+    """Launch the ACP adapter through env with every unsafe route removed."""
+    args: list[str] = []
+    for name in _SUBSCRIPTION_SAFETY_UNSET:
+        args.extend(("-u", name))
+    return (*args, "/usr/local/bin/claude-agent-acp")
 
 
 class ClaudeACPProfile(ProviderProfile):
     """Claude Code external-process provider."""
+
+    def create_client(self, **client_kwargs: Any) -> Any:
+        """Use Hermes' ACP OpenAI-shape client with this profile's launch data."""
+        return CopilotACPClient(**client_kwargs)
 
     def fetch_models(
         self,
@@ -75,5 +79,9 @@ register_provider(
         auth_type="external_process",
         supports_health_check=False,
         fallback_models=("default", "opus[1m]", "sonnet", "haiku"),
+        process_command="env",
+        process_args=_subscription_safe_args(),
+        process_command_env_vars=(),
+        process_args_env_var="",
     )
 )
