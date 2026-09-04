@@ -16,8 +16,8 @@ READ_MANIFEST = ROOT / "scripts/read-agent-image-manifest.py"
 EMIT_MANIFEST = ROOT / "scripts/emit-fleet-image-manifest.py"
 COMPACT_SBOM = ROOT / "scripts/compact-spdx-sbom.py"
 AGENT_REPOSITORY = "ghcr.io/mekenthompson/hermes-agent"
-AGENT_REVISION = "2e09d919143f5fb8a6ee860dc5736cf39dc3f164"
-AGENT_DIGEST = "sha256:e03c303645f105cf2e30dc1059702f79c2bd7687106fe089feb6135f95428d10"
+AGENT_REVISION = "eb41ec651c66ba651ba37ed39ee5b90b772c362e"
+AGENT_DIGEST = "sha256:c1839ef8b4f894f40d4ad1940f7bb10dec3787aa3da0536df85f9badc16e254f"
 AGENT_REF = f"{AGENT_REPOSITORY}@{AGENT_DIGEST}"
 ONEPASSWORD_CLI_IMAGE = (
     "docker.io/1password/op@"
@@ -44,6 +44,7 @@ class FleetImageReleaseTests(unittest.TestCase):
             ROOT / "release/spdx-2.3-schema.json",
             ROOT / "release/spdx-validation-requirements.txt",
             ROOT / "docs/image-release.md",
+            ROOT / "scripts/claude-acp-subscription",
         ):
             with self.subTest(path=path):
                 self.assertTrue(path.is_file())
@@ -119,6 +120,7 @@ class FleetImageReleaseTests(unittest.TestCase):
             "claude_acp_plugin_source",
             "claude_acp_plugin_revision",
             "COPY plugins/model-providers/claude-acp/ /opt/hermes/plugins/model-providers/claude-acp/",
+            "COPY --chmod=0755 scripts/claude-acp-subscription /usr/local/bin/hermes-claude-acp-subscription",
             "ln -s /opt/coding-clis/node_modules/.bin/claude-agent-acp /usr/local/bin/claude-agent-acp",
             "/etc/hermes-fleet/image-provenance.json",
         ):
@@ -195,37 +197,10 @@ class FleetImageReleaseTests(unittest.TestCase):
                 "upstream_plugin_yaml_sha256": "e1dd416295af66cefc1ba67812d359f02f9d1132f4a5f89a28d019797c6da00f",
             },
         )
-        self.assertIn('command="claude-agent-acp"', plugin)
+        self.assertNotIn("agent.acp_agent_registry", plugin)
         self.assertIn('name="claude-acp"', plugin)
         self.assertIn('base_url="acp://claude"', plugin)
         tree = ast.parse(plugin)
-        safety_assignment = next(
-            node
-            for node in tree.body
-            if isinstance(node, ast.Assign)
-            and any(
-                isinstance(target, ast.Name) and target.id == "_SUBSCRIPTION_SAFETY_UNSET"
-                for target in node.targets
-            )
-        )
-        safety_unset = set(ast.literal_eval(safety_assignment.value))
-        unsafe_routes = {
-            "ANTHROPIC_AUTH_TOKEN",
-            "ANTHROPIC_API_KEY",
-            "ANTHROPIC_BASE_URL",
-            "CLAUDE_CODE_USE_BEDROCK",
-            "CLAUDE_CODE_USE_VERTEX",
-            "CLAUDE_CODE_USE_FOUNDRY",
-            "HTTP_PROXY",
-            "HTTPS_PROXY",
-            "ALL_PROXY",
-            "NO_PROXY",
-            "http_proxy",
-            "https_proxy",
-            "all_proxy",
-            "no_proxy",
-        }
-        self.assertTrue(unsafe_routes.issubset(safety_unset))
         profile_call = next(
             node
             for node in ast.walk(tree)
@@ -238,9 +213,22 @@ class FleetImageReleaseTests(unittest.TestCase):
         self.assertEqual(ast.literal_eval(profile_keywords["auth_type"]), "external_process")
         self.assertEqual(ast.literal_eval(profile_keywords["base_url"]), "acp://claude")
         self.assertEqual(
+            ast.literal_eval(profile_keywords["process_command"]),
+            "/usr/local/bin/hermes-claude-acp-subscription",
+        )
+        self.assertEqual(ast.literal_eval(profile_keywords["process_args"]), ())
+        self.assertEqual(
             ast.literal_eval(profile_keywords["fallback_models"]),
             ("default", "opus[1m]", "sonnet", "haiku"),
         )
+        launcher = (ROOT / "scripts/claude-acp-subscription").read_text(encoding="utf-8")
+        for variable in (
+            "ANTHROPIC_AUTH_TOKEN", "ANTHROPIC_API_KEY", "ANTHROPIC_BASE_URL",
+            "CLAUDE_CODE_USE_BEDROCK", "CLAUDE_CODE_USE_VERTEX", "CLAUDE_CODE_USE_FOUNDRY",
+            "HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY", "NO_PROXY",
+        ):
+            self.assertIn(variable, launcher)
+        self.assertIn('exec /usr/local/bin/claude-agent-acp "$@"', launcher)
         self.assertIn(CLAUDE_ACP_PLUGIN_REVISION, plugin)
         self.assertIn("kind: model-provider", metadata)
 
@@ -292,7 +280,8 @@ class FleetImageReleaseTests(unittest.TestCase):
             'pathlib.Path("/opt/coding-clis/node_modules/@agentclientprotocol/claude-agent-acp/package.json")',
             "/opt/hermes/plugins/model-providers/claude-acp/__init__.py",
             'get_provider_profile("claude-acp")',
-            'resolve_agent_launch("claude")',
+            "resolve_external_process_provider_credentials",
+            "hermes-claude-acp-subscription",
             "docker.sock",
             "scripts/verify-inherited-runtime-config.py",
             "os.getuid() != 0",

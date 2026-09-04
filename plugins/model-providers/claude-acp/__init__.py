@@ -1,57 +1,27 @@
 """Claude Code subscription provider via ACP.
 
 Adapted from https://github.com/mvdbastos/hermes-acp-agents at source
-revision 0526610a3945cc376ac517b63ca358a5b838a2fc. The Fleet variant
+revision 0526610a3945cc376ac517b63ca358a5b838a2fc. The Fleet launcher
 fails closed to the Claude subscription login by removing API, proxy,
 cloud-provider, and model-override environment variables before launch.
 """
 
-from agent.acp_agent_registry import ACPAgentEntry, register_acp_agent
+from typing import Any
+
 from providers import register_provider
 from providers.base import ProviderProfile
-
-_SUBSCRIPTION_SAFETY_UNSET = (
-    "CLAUDECODE",
-    "CLAUDE_CODE_ENTRYPOINT",
-    "CLAUDE_CODE_SSE_PORT",
-    "ANTHROPIC_AUTH_TOKEN",
-    "ANTHROPIC_API_KEY",
-    "ANTHROPIC_BASE_URL",
-    "ANTHROPIC_CUSTOM_HEADERS",
-    "HTTP_PROXY",
-    "HTTPS_PROXY",
-    "ALL_PROXY",
-    "NO_PROXY",
-    "http_proxy",
-    "https_proxy",
-    "all_proxy",
-    "no_proxy",
-    "CLAUDE_CODE_USE_BEDROCK",
-    "CLAUDE_CODE_USE_VERTEX",
-    "CLAUDE_CODE_USE_FOUNDRY",
-    "ANTHROPIC_PROFILE",
-    "ANTHROPIC_FEDERATION_RULE_ID",
-    "ANTHROPIC_ORGANIZATION_ID",
-    "ANTHROPIC_MODEL",
-    "ANTHROPIC_DEFAULT_OPUS_MODEL",
-    "ANTHROPIC_DEFAULT_SONNET_MODEL",
-    "ANTHROPIC_DEFAULT_HAIKU_MODEL",
-    "CLAUDE_CODE_SUBAGENT_MODEL",
-)
-
-register_acp_agent(
-    "claude",
-    ACPAgentEntry(
-        command="claude-agent-acp",
-        env_unset=_SUBSCRIPTION_SAFETY_UNSET,
-        display_name="Claude Code",
-        install_hint="Install @agentclientprotocol/claude-agent-acp 0.70.0.",
-    ),
-)
 
 
 class ClaudeACPProfile(ProviderProfile):
     """Claude Code external-process provider."""
+
+    def create_client(self, **client_kwargs: Any) -> Any:
+        """Build the generic ACP stdio shim with this provider's launcher."""
+        from agent.copilot_acp_client import CopilotACPClient
+
+        client_kwargs["command"] = self.process_command
+        client_kwargs["args"] = list(self.process_args)
+        return CopilotACPClient(**client_kwargs)
 
     def fetch_models(
         self,
@@ -74,6 +44,8 @@ register_provider(
         base_url="acp://claude",
         auth_type="external_process",
         supports_health_check=False,
+        process_command="/usr/local/bin/hermes-claude-acp-subscription",
+        process_args=(),
         fallback_models=("default", "opus[1m]", "sonnet", "haiku"),
     )
 )

@@ -24,6 +24,7 @@ class PublicProductTests(unittest.TestCase):
             "contracts/config.json",
             "contracts/plugins.json",
             "scripts/verify-public-tree.py",
+            "scripts/claude-acp-subscription",
             "scripts/image_ref.py",
             "scripts/verify-agent-image-ref.py",
             "scripts/build-fleet-image.py",
@@ -113,6 +114,7 @@ class PublicProductTests(unittest.TestCase):
         self.assertIn("node /opt/coding-clis/node_modules/@anthropic-ai/claude-code/install.cjs", text)
         self.assertIn("/usr/local/bin/claude-agent-acp", text)
         self.assertIn("plugins/model-providers/claude-acp", text)
+        self.assertIn("hermes-claude-acp-subscription", text)
         self.assertIn("DISABLE_AUTOUPDATER=1", text)
         self.assertIn("scripts/image_ref.py /opt/hermes-fleet/bin/image_ref.py", text)
         self.assertIn("scripts/verify-agent-image-ref.py /opt/hermes-fleet/bin/verify-agent-image-ref", text)
