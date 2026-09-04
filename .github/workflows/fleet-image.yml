@@ -175,12 +175,15 @@ jobs:
           assert perplexity.supports_search() and not perplexity.supports_extract()
           assert not perplexity.is_available()
           from providers import get_provider_profile
-          from agent.acp_agent_registry import resolve_agent_launch
+          from hermes_cli.auth import resolve_external_process_provider_credentials
           profile = get_provider_profile("claude-acp")
           assert profile is not None and profile.base_url == "acp://claude", profile
-          command, args = resolve_agent_launch("claude")
-          assert command == "claude-agent-acp" and args == [], (command, args)
-          assert shutil.which(command) == "/usr/local/bin/claude-agent-acp"
+          creds = resolve_external_process_provider_credentials("claude-acp")
+          assert creds["command"] == "/usr/local/bin/hermes-claude-acp-subscription", creds
+          assert creds["args"] == [], creds
+          assert shutil.which(creds["command"]) == creds["command"]
+          client = profile.create_client(api_key=creds["api_key"], base_url=creds["base_url"])
+          assert client is not None
           assert pwd.getpwnam("hermes").pw_uid != 0
           assert not pathlib.Path("/var/run/docker.sock").exists()
           assert pathlib.Path("/opt/hermes-fleet/contracts/image.json").is_file()
@@ -423,12 +426,15 @@ jobs:
           assert perplexity.supports_search() and not perplexity.supports_extract()
           assert not perplexity.is_available()
           from providers import get_provider_profile
-          from agent.acp_agent_registry import resolve_agent_launch
+          from hermes_cli.auth import resolve_external_process_provider_credentials
           profile = get_provider_profile("claude-acp")
           assert profile is not None and profile.base_url == "acp://claude", profile
-          command, args = resolve_agent_launch("claude")
-          assert command == "claude-agent-acp" and args == [], (command, args)
-          assert shutil.which(command) == "/usr/local/bin/claude-agent-acp"
+          creds = resolve_external_process_provider_credentials("claude-acp")
+          assert creds["command"] == "/usr/local/bin/hermes-claude-acp-subscription", creds
+          assert creds["args"] == [], creds
+          assert shutil.which(creds["command"]) == creds["command"]
+          client = profile.create_client(api_key=creds["api_key"], base_url=creds["base_url"])
+          assert client is not None
           assert pwd.getpwnam("hermes").pw_uid != 0
           assert not pathlib.Path("/var/run/docker.sock").exists()
           '
